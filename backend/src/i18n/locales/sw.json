@@ -1,0 +1,7 @@
+{
+  "greeting": "Karibu",
+  "auth": {
+    "registerSuccess": "Usajili umefanikiwa.",
+    "loginSuccess": "Umefanikiwa kuingia."
+  }
+}

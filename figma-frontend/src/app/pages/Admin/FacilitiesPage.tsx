@@ -1,0 +1,567 @@
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from 'react-i18next';
+import { mockFacilities as initialFacilities, mockCompanies, Facility } from '../../../data/mockData';
+import { Plus, Warehouse, Edit, Trash2, Search, AlertTriangle, X, Film, Trophy, Calendar, TreePine, Home } from 'lucide-react';
+import { useSystemLogs } from '../../../contexts/SystemLogsContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { toast } from 'sonner';
+
+const getCategoryIcon = (category: string) => {
+  switch (category) {
+    case 'entertainment': return Film;
+    case 'sports': return Trophy;
+    case 'events': return Calendar;
+    case 'outdoor': return TreePine;
+    case 'housing': return Home;
+    default: return Warehouse;
+  }
+};
+
+const getCategoryColor = (category: string) => {
+  switch (category) {
+    case 'entertainment': return 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300';
+    case 'sports': return 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300';
+    case 'events': return 'bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300';
+    case 'outdoor': return 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
+    case 'housing': return 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300';
+    default: return 'bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300';
+  }
+};
+
+export const FacilitiesPage = () => {
+  const { t } = useTranslation();
+  const { addLog } = useSystemLogs();
+  const { user } = useAuth();
+
+  const [facilities, setFacilities] = useState<Facility[]>(initialFacilities);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [showModal, setShowModal] = useState(false);
+  const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<Facility | null>(null);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    companyId: '',
+    category: 'entertainment' as Facility['category'],
+    type: 'movie_theatre' as Facility['type'],
+    sittingPlan: '',
+    sittingLength: 0,
+    capacity: 0,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const categories = ['entertainment', 'sports', 'events', 'outdoor', 'housing'];
+
+  const filteredFacilities = facilities.filter(facility => {
+    const matchesSearch = facility.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = filterCategory === 'all' || facility.category === filterCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const stats = {
+    total: facilities.length,
+    entertainment: facilities.filter(f => f.category === 'entertainment').length,
+    sports: facilities.filter(f => f.category === 'sports').length,
+    events: facilities.filter(f => f.category === 'events').length,
+  };
+
+  const handleOpenModal = (facility?: Facility) => {
+    if (facility) {
+      setEditingFacility(facility);
+      setFormData({
+        name: facility.name,
+        companyId: facility.companyId,
+        category: facility.category,
+        type: facility.type,
+        sittingPlan: facility.sittingPlan,
+        sittingLength: facility.sittingLength,
+        capacity: facility.capacity,
+      });
+    } else {
+      setEditingFacility(null);
+      setFormData({
+        name: '',
+        companyId: mockCompanies.filter(c => c.type === 'facility')[0]?.id || '',
+        category: 'entertainment',
+        type: 'movie_theatre',
+        sittingPlan: '3-3',
+        sittingLength: 15,
+        capacity: 90,
+      });
+    }
+    setErrors({});
+    setShowModal(true);
+  };
+
+  const calculateCapacity = (plan: string, length: number) => {
+    const seats = plan.split('-').reduce((sum, val) => sum + parseInt(val || '0'), 0);
+    return seats * length;
+  };
+
+  const handleSave = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name.trim()) newErrors.name = 'Facility name is required';
+    if (!formData.companyId) newErrors.companyId = 'Company is required';
+    if (!formData.sittingPlan.trim()) newErrors.sittingPlan = 'Sitting plan is required';
+    if (formData.sittingLength <= 0) newErrors.sittingLength = 'Number of rows must be greater than 0';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    const capacity = calculateCapacity(formData.sittingPlan, formData.sittingLength);
+
+    if (editingFacility) {
+      setFacilities(prev => prev.map(f =>
+        f.id === editingFacility.id
+          ? { ...f, ...formData, capacity }
+          : f
+      ));
+
+      addLog({
+        userId: user?.id || '',
+        userName: user?.fullName || '',
+        action: `Updated facility: ${formData.name}`,
+        module: 'facilities',
+        status: 'success',
+        details: `Category: ${formData.category}, Type: ${formData.type}, Capacity: ${capacity}`,
+      });
+
+      toast.success('Facility updated successfully');
+    } else {
+      const newFacility: Facility = {
+        id: `facility${Date.now()}`,
+        ...formData,
+        capacity,
+      };
+
+      setFacilities(prev => [...prev, newFacility]);
+
+      addLog({
+        userId: user?.id || '',
+        userName: user?.fullName || '',
+        action: `Created facility: ${formData.name}`,
+        module: 'facilities',
+        status: 'success',
+        details: `Category: ${formData.category}, Type: ${formData.type}, Capacity: ${capacity}`,
+      });
+
+      toast.success('Facility created successfully');
+    }
+
+    setShowModal(false);
+    setEditingFacility(null);
+  };
+
+  const handleDelete = (facility: Facility) => {
+    setFacilities(prev => prev.filter(f => f.id !== facility.id));
+
+    addLog({
+      userId: user?.id || '',
+      userName: user?.fullName || '',
+      action: `Deleted facility: ${facility.name}`,
+      module: 'facilities',
+      status: 'warning',
+      details: `Category: ${facility.category}, Type: ${facility.type}`,
+    });
+
+    setDeleteConfirm(null);
+    toast.success('Facility deleted successfully');
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {t('nav.facilities')}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Manage cinemas, stadiums, and event venues
+          </p>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => handleOpenModal()}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-lg"
+        >
+          <Plus className="w-5 h-5" />
+          Add Facility
+        </motion.button>
+      </motion.div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl text-white shadow-lg"
+        >
+          <p className="text-sm opacity-90 mb-1">Total Facilities</p>
+          <p className="text-3xl font-bold">{stats.total}</p>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl text-white shadow-lg"
+        >
+          <p className="text-sm opacity-90 mb-1">Entertainment</p>
+          <p className="text-3xl font-bold">{stats.entertainment}</p>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-gradient-to-br from-red-500 to-red-600 p-6 rounded-xl text-white shadow-lg"
+        >
+          <p className="text-sm opacity-90 mb-1">Sports</p>
+          <p className="text-3xl font-bold">{stats.sports}</p>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gradient-to-br from-pink-500 to-pink-600 p-6 rounded-xl text-white shadow-lg"
+        >
+          <p className="text-sm opacity-90 mb-1">Events</p>
+          <p className="text-3xl font-bold">{stats.events}</p>
+        </motion.div>
+      </div>
+
+      {/* Filters */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder={t('common.search') + ' facilities...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setFilterCategory('all')}
+              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                filterCategory === 'all'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              All
+            </motion.button>
+            {categories.map((category) => (
+              <motion.button
+                key={category}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setFilterCategory(category)}
+                className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                  filterCategory === category
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {t(`categories.${category}`)}
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Facilities Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <AnimatePresence mode="popLayout">
+          {filteredFacilities.map((facility, index) => {
+            const company = mockCompanies.find(c => c.id === facility.companyId);
+            const Icon = getCategoryIcon(facility.category);
+            return (
+              <motion.div
+                key={facility.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ delay: index * 0.05 }}
+                whileHover={{ y: -4 }}
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      whileHover={{ rotate: 360 }}
+                      transition={{ duration: 0.5 }}
+                      className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center"
+                    >
+                      <Icon className="w-6 h-6 text-white" />
+                    </motion.div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white">{facility.name}</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{company?.name}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs ${getCategoryColor(facility.category)}`}>
+                    {t(`categories.${facility.category}`)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.type.replace('_', ' ')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Capacity</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.capacity} seats</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Layout</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.sittingPlan}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Rows</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.sittingLength}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleOpenModal(facility)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setDeleteConfirm(facility)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </motion.button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {/* Add/Edit Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {editingFacility ? 'Edit Facility' : 'Add New Facility'}
+                </h2>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Facility Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., Cinema Hall 3"
+                  />
+                  {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Company
+                  </label>
+                  <select
+                    value={formData.companyId}
+                    onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select Company</option>
+                    {mockCompanies.filter(c => c.type === 'facility').map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {errors.companyId && <p className="text-red-500 text-sm mt-1">{errors.companyId}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value as Facility['category'] })}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{t(`categories.${cat}`)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Type
+                  </label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value as Facility['type'] })}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="movie_theatre">Movie Theatre</option>
+                    <option value="stadium">Stadium</option>
+                    <option value="conference_hall">Conference Hall</option>
+                    <option value="arena">Arena</option>
+                    <option value="park">Park</option>
+                    <option value="hotel_room">Hotel Room</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Sitting Plan
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.sittingPlan}
+                    onChange={(e) => setFormData({ ...formData, sittingPlan: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., 3-3"
+                  />
+                  {errors.sittingPlan && <p className="text-red-500 text-sm mt-1">{errors.sittingPlan}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Number of Rows
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.sittingLength}
+                    onChange={(e) => setFormData({ ...formData, sittingLength: parseInt(e.target.value) || 0 })}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., 15"
+                  />
+                  {errors.sittingLength && <p className="text-red-500 text-sm mt-1">{errors.sittingLength}</p>}
+                </div>
+
+                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Calculated capacity: <strong>{calculateCapacity(formData.sittingPlan, formData.sittingLength)} seats</strong>
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    {editingFacility ? 'Update' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full shadow-xl"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
+                  <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Delete Facility
+                </h3>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDelete(deleteConfirm)}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
