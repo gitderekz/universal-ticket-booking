@@ -41,6 +41,17 @@ module.exports = (sequelize) => {
       allowNull: false,
       defaultValue: 0
     },
+    sittingPlan: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'sitting_plan'
+    },
+    sittingLength: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'sitting_length'
+    },
     images: {
       type: DataTypes.JSON,
       allowNull: true,

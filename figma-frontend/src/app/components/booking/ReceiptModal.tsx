@@ -22,6 +22,8 @@ interface BookingData {
   to?: string;
   facility?: string;
   activity?: string;
+  transportRegistration?: string;
+  paymentMethod?: string;
 }
 
 interface ReceiptModalProps {
@@ -32,6 +34,8 @@ interface ReceiptModalProps {
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ booking, onClose }) => {
   const { t } = useTranslation();
   const { formatPrice } = useCurrency();
+  const seatCount = booking.seats.length;
+  const seatPrice = seatCount > 0 ? booking.totalPrice / seatCount : booking.totalPrice || 0;
 
   const handlePrint = () => {
     window.print();
@@ -75,8 +79,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ booking, onClose }) 
                 <p className="text-sm text-gray-500 dark:text-gray-400">Booking Number</p>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">{booking.bookingNumber}</p>
               </div>
-              <div className="w-24 h-24 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                <QrCode className="w-16 h-16 text-gray-400" />
+              <div className="w-24 h-24 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
+                <div className="text-center">
+                  <QrCode className="w-12 h-12 text-gray-400 mx-auto mb-1" />
+                  <p className="text-xs text-gray-500 font-mono">{booking.bookingNumber}</p>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -95,13 +102,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ booking, onClose }) 
             <h3 className="font-bold text-gray-900 dark:text-white mb-3">Journey Details</h3>
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">{booking.type === 'transport' ? 'Route' : 'Event'}</span>
+                <span className="text-gray-600 dark:text-gray-400">Route</span>
                 <span className="font-medium text-gray-900 dark:text-white">{booking.title}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Company</span>
                 <span className="font-medium text-gray-900 dark:text-white">{booking.company}</span>
               </div>
+              {booking.transportRegistration && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Transport Reg. No.</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{booking.transportRegistration}</span>
+                </div>
+              )}
               {booking.from && booking.to && (
                 <>
                   <div className="flex justify-between">
@@ -159,7 +172,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ booking, onClose }) 
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Seats ({booking.seats.length}x)</span>
                 <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPrice(booking.totalPrice / booking.seats.length)}
+                  {seatCount > 0 ? formatPrice(seatPrice) : 'N/A'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -172,7 +185,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ booking, onClose }) 
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Payment Method</span>
-                <span className="font-medium text-green-600">M-Pesa</span>
+                <span className="font-medium text-green-600">{booking.paymentMethod || 'M-Pesa'}</span>
               </div>
             </div>
           </div>

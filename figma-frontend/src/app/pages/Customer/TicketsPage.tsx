@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Ticket, Calendar, MapPin, Clock, Download, Eye, Filter, Search } from 'lucide-react';
 import { ReceiptModal } from '../../components/booking/ReceiptModal';
+import { apiClient } from '../../../services/apiClient';
 
 interface BookingData {
   id: string;
@@ -25,6 +26,8 @@ interface BookingData {
   to?: string;
   facility?: string;
   activity?: string;
+  transportRegistration?: string;
+  paymentMethod?: string;
 }
 
 export const TicketsPage: React.FC = () => {
@@ -34,87 +37,80 @@ export const TicketsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedBooking, setSelectedBooking] = useState<BookingData | null>(null);
+  const [bookings, setBookings] = useState<BookingData[]>([]);
 
-  const mockBookings: BookingData[] = [
-    {
-      id: 'b1',
-      type: 'transport',
-      category: 'bus',
-      title: 'Dar es Salaam → Mwanza',
-      company: 'Kilimanjaro Express',
-      date: '2026-05-10',
-      time: '10:00',
-      seats: ['A5', 'A6'],
-      totalPrice: 120000,
-      status: 'confirmed',
-      paymentStatus: 'paid',
-      bookingNumber: 'BK-2026-001234',
-      passengerName: user?.fullName || 'John Doe',
-      passengerPhone: user?.phone || '+255 712 345 678',
-      passengerEmail: user?.email || 'john@example.com',
-      from: 'Dar es Salaam',
-      to: 'Mwanza',
-    },
-    {
-      id: 'b2',
-      type: 'facility',
-      category: 'entertainment',
-      title: 'Avengers: Endgame',
-      company: 'Dar Es Salaam Cinemas',
-      date: '2026-05-08',
-      time: '18:00',
-      seats: ['C12', 'C13', 'C14'],
-      totalPrice: 36000,
-      status: 'completed',
-      paymentStatus: 'paid',
-      bookingNumber: 'BK-2026-001235',
-      passengerName: user?.fullName || 'John Doe',
-      passengerPhone: user?.phone || '+255 712 345 678',
-      passengerEmail: user?.email || 'john@example.com',
-      facility: 'Cinema Hall 1',
-      activity: 'Avengers: Endgame',
-    },
-    {
-      id: 'b3',
-      type: 'facility',
-      category: 'sports',
-      title: 'Simba vs Yanga',
-      company: 'National Stadium',
-      date: '2026-05-12',
-      time: '16:00',
-      seats: ['VIP-A45', 'VIP-A46', 'VIP-A47', 'VIP-A48'],
-      totalPrice: 60000,
-      status: 'confirmed',
-      paymentStatus: 'paid',
-      bookingNumber: 'BK-2026-001236',
-      passengerName: user?.fullName || 'John Doe',
-      passengerPhone: user?.phone || '+255 712 345 678',
-      passengerEmail: user?.email || 'john@example.com',
-      facility: 'Main Arena',
-      activity: 'Simba vs Yanga',
-    },
-    {
-      id: 'b4',
-      type: 'transport',
-      category: 'train',
-      title: 'Dar es Salaam → Kigoma',
-      company: 'Tanzania Railways',
-      date: '2026-05-15',
-      time: '14:00',
-      seats: ['1A'],
-      totalPrice: 85000,
-      status: 'pending',
-      paymentStatus: 'pending',
-      bookingNumber: 'BK-2026-001237',
-      passengerName: user?.fullName || 'John Doe',
-      passengerPhone: user?.phone || '+255 712 345 678',
-      passengerEmail: user?.email || 'john@example.com',
-      from: 'Dar es Salaam',
-      to: 'Kigoma',
-    },
-  ];
+  useEffect(() => {
+    const loadBookings = async () => {
+      try {
+        const response = await apiClient.get('/bookings', {
+          params: { userId: user?.id }
+        });
+        const bookingsData = response.data?.bookings || response.data || [];
+        // Transform backend bookings to BookingData format
+        const transformedBookings = (Array.isArray(bookingsData) ? bookingsData : []).map((b: any) => {
+          const journey = b.Journey;
+          const route = journey?.Route;
+          const transport = journey?.Transport;
+          const activityInstance = b.ActivityInstance;
+          const activity = activityInstance?.Activity;
+          const facility = activityInstance?.Facility;
+          const company = facility?.Company || transport?.Company;
+          const originStation = route?.originStation;
+          const destinationStation = route?.destinationStation;
+          const seatHolds = b.SeatHolds || [];
+          const seatItems = b.BookingItems || [];
+          const payment = b.Payments?.[0]; // Get first payment if exists
 
-  const filteredBookings = mockBookings.filter(booking => {
+          const isFacilityBooking = b.booking_type === 'facility' || Boolean(activityInstance);
+          const bookingTitle = isFacilityBooking
+            ? activity?.name || facility?.name || `Booking ${b.id}`
+            : route?.name || `Journey ${b.id}`;
+          const bookingCompany = isFacilityBooking
+            ? company?.name || facility?.name || 'Unknown Facility'
+            : transport?.Company?.name || 'Unknown Company';
+          const bookingDate = isFacilityBooking
+            ? activityInstance ? new Date(activityInstance.start_at).toLocaleDateString('en-US') : new Date().toISOString().split('T')[0]
+            : journey?.journey_date || new Date().toISOString().split('T')[0];
+          const bookingTime = isFacilityBooking
+            ? activityInstance ? new Date(activityInstance.start_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '00:00'
+            : journey?.departure_at ? new Date(journey.departure_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '00:00';
+          const seats = seatItems.length > 0 ? seatItems.map((item: any) => item.item_code || '') : seatHolds.map((sh: any) => sh.seat_code);
+
+          return {
+            id: b.id,
+            type: b.booking_type || 'transport',
+            category: b.booking_type || 'transport',
+            title: bookingTitle,
+            company: bookingCompany,
+            date: bookingDate,
+            time: bookingTime,
+            seats,
+            totalPrice: parseFloat(b.total_amount) || 0,
+            status: b.status || 'pending',
+            paymentStatus: payment?.status === 'completed' ? 'paid' : 'pending',
+            bookingNumber: b.booking_code || `BK-${b.id}`,
+            passengerName: b.contact_name || user?.fullName || 'John Doe',
+            passengerPhone: b.contact_phone || user?.phone || '',
+            passengerEmail: b.contact_email || user?.email || '',
+            from: isFacilityBooking ? facility?.name || '' : originStation?.name || '',
+            to: isFacilityBooking ? activity?.name || '' : destinationStation?.name || '',
+            transportRegistration: transport?.registration_number || '',
+            paymentMethod: payment?.method || 'M-Pesa'
+          };
+        });
+        setBookings(transformedBookings);
+      } catch (error) {
+        console.error('Error loading bookings:', error);
+        // Fallback to empty array or default bookings
+        setBookings([]);
+      }
+    };
+    if (user?.id) {
+      loadBookings();
+    }
+  }, [user?.id]);
+
+  const filteredBookings = bookings.filter(booking => {
     const matchesSearch = booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          booking.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          booking.bookingNumber.toLowerCase().includes(searchTerm.toLowerCase());
@@ -240,7 +236,7 @@ export const TicketsPage: React.FC = () => {
                   {booking.from && booking.to && (
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-2">
                       <MapPin className="w-4 h-4" />
-                      {booking.from} → {booking.to}
+                      Route: {booking.from} → {booking.to}
                     </div>
                   )}
                 </div>

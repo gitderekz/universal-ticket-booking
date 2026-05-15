@@ -9,7 +9,7 @@ module.exports = (sequelize) => {
     },
     route_id: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'routes',
         key: 'id'
@@ -22,6 +22,31 @@ module.exports = (sequelize) => {
         model: 'transports',
         key: 'id'
       }
+    },
+    activity_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'activities',
+        key: 'id'
+      }
+    },
+    facility_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'facilities',
+        key: 'id'
+      }
+    },
+    date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true
+    },
+    available_seats: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null
     },
     departure_time: {
       type: DataTypes.TIME,
@@ -50,7 +75,7 @@ module.exports = (sequelize) => {
       allowNull: true
     },
     status: {
-      type: DataTypes.ENUM('draft', 'active', 'inactive'),
+      type: DataTypes.ENUM('draft', 'active', 'inactive', 'sold_out'),
       allowNull: false,
       defaultValue: 'draft'
     }
@@ -59,6 +84,9 @@ module.exports = (sequelize) => {
     indexes: [
       { fields: ['route_id'] },
       { fields: ['transport_id'] },
+      { fields: ['facility_id'] },
+      { fields: ['activity_id'] },
+      { fields: ['available_seats'] },
       { fields: ['frequency_type'] },
       { fields: ['status'] }
     ]

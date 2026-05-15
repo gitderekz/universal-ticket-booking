@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { mockActivities, mockFacilities, mockCompanies, Activity } from '../../../data/mockData';
+import { getActivities } from '../../../services/managementService';
+import { getFacilities } from '../../../services/adminService';
 import {
   Plus, Edit, Trash2, Search, X, AlertTriangle, CheckCircle2,
   Film, Music, Trophy, Tent, Home, Calendar, Clock, DollarSign,
@@ -67,7 +68,8 @@ export const ActivitiesManagement: React.FC = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [activities, setActivities] = useState<Activity[]>([...mockActivities]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [facilities, setFacilities] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -93,9 +95,15 @@ export const ActivitiesManagement: React.FC = () => {
     setShowModal(true);
   };
 
-  const openEdit = (activity: Activity) => {
+  const openEdit = (activity: any) => {
     setEditTarget(activity);
-    setForm({ ...activity });
+    setForm({
+      ...activity,
+      facilityId: activity.facility_id || activity.facilityId || '',
+      name: activity.name || '',
+      type: activity.activity_type || activity.type || 'event',
+      status: activity.status || 'active',
+    });
     setFormErrors({});
     setShowModal(true);
   };
@@ -137,10 +145,10 @@ export const ActivitiesManagement: React.FC = () => {
   };
 
   const filtered = activities.filter(a => {
-    const facility = mockFacilities.find(f => f.id === a.facilityId);
-    const matchSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchType = filterType === 'all' || a.type === filterType;
+    const facility = facilities.find(f => f.id === a.facility_id);
+    const matchSearch = (a.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (a.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchType = filterType === 'all' || a.activity_type === filterType;
     const matchCat = filterCategory === 'all' || facility?.category === filterCategory;
     return matchSearch && matchType && matchCat;
   });
@@ -151,6 +159,22 @@ export const ActivitiesManagement: React.FC = () => {
     soldOut: activities.filter(a => a.status === 'sold_out').length,
     events: activities.filter(a => a.type === 'event').length,
   };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [activityResult, facilityResult] = await Promise.all([
+          getActivities(),
+          getFacilities(1, 100, ''),
+        ]);
+        setActivities(activityResult || []);
+        setFacilities(facilityResult.facilities || []);
+      } catch (error) {
+        console.error('Failed to load activities or facilities', error);
+      }
+    };
+    loadData();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -224,8 +248,8 @@ export const ActivitiesManagement: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         <AnimatePresence initial={false}>
           {filtered.map(activity => {
-            const facility = mockFacilities.find(f => f.id === activity.facilityId);
-            const company = facility ? mockCompanies.find(c => c.id === facility.companyId) : null;
+            const facility = facilities.find(f => f.id === activity.facility_id);
+            const company = facility?.Company || null;
             const grad = categoryGradient(facility?.category || '');
             const isExpanded = expandedId === activity.id;
 
@@ -335,7 +359,7 @@ export const ActivitiesManagement: React.FC = () => {
                   <select value={form.facilityId} onChange={e => setForm(f => ({ ...f, facilityId: e.target.value }))}
                     className={`w-full px-3 py-2.5 border rounded-lg dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none ${formErrors.facilityId ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'}`}>
                     <option value="">Select Facility</option>
-                    {mockFacilities.map(f => (
+                    {facilities.map(f => (
                       <option key={f.id} value={f.id}>{f.name} ({f.category})</option>
                     ))}
                   </select>

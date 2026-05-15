@@ -7,7 +7,11 @@ const listRoutes = async (req, res, next) => {
         { model: Transport, attributes: ['id', 'name'] },
         { model: Station, as: 'originStation', attributes: ['id', 'name', 'city'] },
         { model: Station, as: 'destinationStation', attributes: ['id', 'name', 'city'] },
-        { model: RouteStation, include: [{ model: Station, attributes: ['id', 'name', 'city'] }] }
+        { 
+          model: RouteStation, 
+          attributes: ['id', 'sequence_order', 'distance_from_origin', 'cumulative_price', 'is_break_stop', 'stop_duration_minutes'],
+          include: [{ model: Station, attributes: ['id', 'name', 'city'] }] 
+        }
       ],
       order: [['created_at', 'DESC']]
     });

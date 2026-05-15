@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { mockCompanies as initialCompanies, Company } from '../../../data/mockData';
+import { getCompanies, createCompany, updateCompany, deleteCompany, Company } from '../../../services/adminService';
 import { Plus, Building2, Edit, Trash2, Search, AlertTriangle, X } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -12,7 +12,8 @@ export const CompaniesPage = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [companies, setCompanies] = useState<Company[]>(initialCompanies);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'transport' | 'facility'>('all');
   const [showModal, setShowModal] = useState(false);
@@ -21,15 +22,35 @@ export const CompaniesPage = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    type: 'transport' as 'transport' | 'facility',
+    category: 'transport' as 'transport' | 'facility',
     description: '',
+    email: '',
+    phone: '',
+    address: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    const loadCompanies = async () => {
+      setLoading(true);
+      try {
+        const response = await getCompanies(1, 100, '');
+        setCompanies(response.companies || []);
+      } catch (error) {
+        console.error('Error loading companies:', error);
+        toast.error('Unable to load companies');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCompanies();
+  }, []);
+
   const filteredCompanies = companies.filter(company => {
     const matchesSearch = company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      company.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || company.type === filterType;
+      (company.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || company.category === filterType;
     return matchesSearch && matchesType;
   });
 
@@ -44,18 +65,28 @@ export const CompaniesPage = () => {
       setEditingCompany(company);
       setFormData({
         name: company.name,
-        type: company.type,
-        description: company.description,
+        category: company.category as 'transport' | 'facility',
+        description: company.description || '',
+        email: company.contact_email || '',
+        phone: company.contact_phone || '',
+        address: '',
       });
     } else {
       setEditingCompany(null);
-      setFormData({ name: '', type: 'transport', description: '' });
+      setFormData({
+        name: '',
+        category: 'transport',
+        description: '',
+        email: '',
+        phone: '',
+        address: '',
+      });
     }
     setErrors({});
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) newErrors.name = 'Company name is required';
@@ -66,61 +97,83 @@ export const CompaniesPage = () => {
       return;
     }
 
-    if (editingCompany) {
-      setCompanies(prev => prev.map(c =>
-        c.id === editingCompany.id
-          ? { ...c, ...formData }
-          : c
-      ));
+    try {
+      if (editingCompany) {
+        const updated = await updateCompany(editingCompany.id, {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          status: 'active',
+          category: formData.category,
+        });
 
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Updated company: ${formData.name}`,
-        module: 'companies',
-        status: 'success',
-        details: `Type: ${formData.type}, Description: ${formData.description}`,
-      });
+        setCompanies(prev => prev.map(c =>
+          c.id === updated.id ? { ...c, ...updated } : c
+        ));
 
-      toast.success('Company updated successfully');
-    } else {
-      const newCompany: Company = {
-        id: `company${Date.now()}`,
-        ...formData,
-      };
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Updated company: ${formData.name}`,
+          module: 'companies',
+          status: 'success',
+          details: `Category: ${formData.category}, Description: ${formData.description}`,
+        });
 
-      setCompanies(prev => [...prev, newCompany]);
+        toast.success('Company updated successfully');
+      } else {
+        const created = await createCompany({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          category: formData.category,
+          status: 'active',
+        });
 
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Created company: ${formData.name}`,
-        module: 'companies',
-        status: 'success',
-        details: `Type: ${formData.type}, Description: ${formData.description}`,
-      });
+        setCompanies(prev => [created, ...prev]);
 
-      toast.success('Company created successfully');
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Created company: ${formData.name}`,
+          module: 'companies',
+          status: 'success',
+          details: `Category: ${formData.category}, Description: ${formData.description}`,
+        });
+
+        toast.success('Company created successfully');
+      }
+
+      setShowModal(false);
+      setEditingCompany(null);
+    } catch (error) {
+      console.error('Error saving company:', error);
+      toast.error('Unable to save company');
     }
-
-    setShowModal(false);
-    setEditingCompany(null);
   };
 
-  const handleDelete = (company: Company) => {
-    setCompanies(prev => prev.filter(c => c.id !== company.id));
+  const handleDelete = async (company: Company) => {
+    try {
+      await deleteCompany(company.id);
+      setCompanies(prev => prev.filter(c => c.id !== company.id));
 
-    addLog({
-      userId: user?.id || '',
-      userName: user?.fullName || '',
-      action: `Deleted company: ${company.name}`,
-      module: 'companies',
-      status: 'warning',
-      details: `Type: ${company.type}`,
-    });
+      addLog({
+        userId: user?.id || '',
+        userName: user?.fullName || '',
+        action: `Deleted company: ${company.name}`,
+        module: 'companies',
+        status: 'warning',
+        details: `Category: ${company.category}`,
+      });
 
-    setDeleteConfirm(null);
-    toast.success('Company deleted successfully');
+      setDeleteConfirm(null);
+      toast.success('Company deleted successfully');
+    } catch (error) {
+      console.error('Error deleting company:', error);
+      toast.error('Unable to delete company');
+    }
   };
 
   return (
@@ -199,19 +252,19 @@ export const CompaniesPage = () => {
             />
           </div>
           <div className="flex gap-2">
-            {(['all', 'transport', 'facility'] as const).map((type) => (
+            {(['all', 'transport', 'facility'] as const).map((category) => (
               <motion.button
-                key={type}
+                key={category}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setFilterType(type)}
+                onClick={() => setFilterType(category)}
                 className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filterType === type
+                  filterType === category
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
-                {type.charAt(0).toUpperCase() + type.slice(1)}
+                {category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1)}
               </motion.button>
             ))}
           </div>
@@ -243,11 +296,11 @@ export const CompaniesPage = () => {
                   <div>
                     <h3 className="font-bold text-gray-900 dark:text-white">{company.name}</h3>
                     <span className={`text-xs px-2 py-1 rounded-full ${
-                      company.type === 'transport'
+                      company.category === 'transport'
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                         : 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
                     }`}>
-                      {company.type}
+                      {company.category}
                     </span>
                   </div>
                 </div>

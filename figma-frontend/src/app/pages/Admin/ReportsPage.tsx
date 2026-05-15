@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { DollarSign, TrendingUp, Users, Calendar, Download, BarChart3, ShoppingCart } from 'lucide-react';
 import { useCurrency } from '../../../contexts/CurrencyContext';
-import { mockRoutes, mockActivities, mockTimetables } from '../../../data/mockData';
+import { getRoutes, getActivities } from '../../../services/managementService';
 
 type TimePeriod = '7d' | '30d' | '90d' | '1y';
 
@@ -48,6 +48,24 @@ const categoryColors = [
 export function ReportsPage() {
   const [period, setPeriod] = useState<TimePeriod>('30d');
   const { formatPrice } = useCurrency();
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [routesRes, activitiesRes] = await Promise.all([
+          getRoutes(),
+          getActivities()
+        ]);
+        setRoutes(routesRes || []);
+        setActivities(activitiesRes || []);
+      } catch (error) {
+        console.error('Error loading reports data:', error);
+      }
+    };
+    loadData();
+  }, []);
 
   // Generate revenue data based on actual routes and activities
   const revenueData = useMemo(() => {
@@ -56,8 +74,8 @@ export function ReportsPage() {
     const now = new Date();
 
     // Calculate base revenue from routes and activities
-    const totalRouteRevenue = mockRoutes.reduce((sum, r) => sum + r.price, 0);
-    const totalActivityRevenue = mockActivities.reduce((sum, a) => sum + a.price, 0);
+    const totalRouteRevenue = routes.reduce((sum, r) => sum + (r.base_price || r.price || 0), 0);
+    const totalActivityRevenue = activities.reduce((sum, a) => sum + (a.price || 0), 0);
     const baseDaily = (totalRouteRevenue + totalActivityRevenue) / 10; // Average per day
 
     for (let i = days - 1; i >= 0; i--) {
@@ -93,52 +111,48 @@ export function ReportsPage() {
     }
 
     return data;
-  }, [period]);
+  }, [period, routes, activities]);
 
   // Category distribution based on actual data
   const categoryData: CategoryData[] = useMemo(() => {
-    const categories = {
-      transport: mockRoutes.length * 15, // Weighted by routes
-      entertainment: mockActivities.filter(a => a.facilityId.includes('f2') || a.facilityId.includes('f7')).length * 12,
-      sports: mockActivities.filter(a => a.facilityId.includes('f4') || a.facilityId.includes('f19')).length * 10,
-      events: mockActivities.filter(a => a.facilityId.includes('f12')).length * 8,
-      outdoor: mockActivities.filter(a => a.facilityId.includes('f15')).length * 6,
-      housing: mockActivities.filter(a => a.facilityId.includes('f25')).length * 5,
-    };
-
     return [
-      { name: 'Transport', value: categories.transport, color: categoryColors[0] },
-      { name: 'Entertainment', value: categories.entertainment, color: categoryColors[1] },
-      { name: 'Sports', value: categories.sports, color: categoryColors[2] },
-      { name: 'Events', value: categories.events, color: categoryColors[3] },
-      { name: 'Outdoor', value: categories.outdoor, color: categoryColors[4] },
-      { name: 'Housing', value: categories.housing, color: categoryColors[5] },
+      { name: 'Transport', value: routes.length * 15, color: categoryColors[0] },
+      { name: 'Entertainment', value: activities.filter(a => a.activity_type === 'entertainment').length * 12, color: categoryColors[1] },
+      { name: 'Sports', value: activities.filter(a => a.activity_type === 'sports').length * 10, color: categoryColors[2] },
+      { name: 'Events', value: activities.filter(a => a.activity_type === 'events').length * 8, color: categoryColors[3] },
+      { name: 'Outdoor', value: activities.filter(a => a.activity_type === 'outdoor').length * 6, color: categoryColors[4] },
+      { name: 'Housing', value: activities.filter(a => a.activity_type === 'housing').length * 5, color: categoryColors[5] },
     ];
-  }, []);
+  }, [activities]);
 
   // Top routes based on actual route data
   const topRoutes: TopItem[] = useMemo(() => {
-    return mockRoutes
+    return routes
       .slice(0, 5)
-      .map(route => ({
-        name: `${route.startLocation} → ${route.endLocation}`,
-        bookings: Math.floor(50 + Math.random() * 200),
-        revenue: route.price * Math.floor(50 + Math.random() * 200),
-      }))
+      .map(route => {
+        const startLoc = route.startLocation || route.originStation?.name || 'Unknown';
+        const endLoc = route.endLocation || route.destinationStation?.name || 'Unknown';
+        const price = route.base_price || route.price || 0;
+        return {
+          name: `${startLoc} → ${endLoc}`,
+          bookings: Math.floor(50 + Math.random() * 200),
+          revenue: price * Math.floor(50 + Math.random() * 200),
+        };
+      })
       .sort((a, b) => b.revenue - a.revenue);
-  }, []);
+  }, [routes]);
 
   // Top activities based on actual activity data
   const topActivities: TopItem[] = useMemo(() => {
-    return mockActivities
+    return activities
       .slice(0, 5)
       .map(activity => ({
         name: activity.name,
         bookings: Math.floor(30 + Math.random() * 150),
-        revenue: activity.price * Math.floor(30 + Math.random() * 150),
+        revenue: (activity.price || 0) * Math.floor(30 + Math.random() * 150),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, []);
+  }, [activities]);
 
   const totalRevenue = revenueData.reduce((sum, item) => sum + item.revenue, 0);
   const totalBookings = revenueData.reduce((sum, item) => sum + item.bookings, 0);

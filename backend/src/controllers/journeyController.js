@@ -43,6 +43,44 @@ const searchJourneys = async (req, res, next) => {
   }
 };
 
+const getJourneysByRoute = async (req, res, next) => {
+  try {
+    const { route_id, transport_id } = req.query;
+
+    const where = { status: 'scheduled' };
+    if (route_id) where.route_id = route_id;
+    if (transport_id) where.transport_id = transport_id;
+
+    const journeys = await Journey.findAll({
+      where,
+      include: [
+        {
+          model: Route,
+          attributes: ['id', 'name', 'base_price'],
+          include: [
+            { model: Station, as: 'originStation', attributes: ['id', 'name', 'city'] },
+            { model: Station, as: 'destinationStation', attributes: ['id', 'name', 'city'] }
+          ]
+        },
+        {
+          model: Transport,
+          attributes: ['id', 'name', 'capacity', 'registration_number'],
+          include: [{ model: require('../models').TransportType, attributes: ['name'] }]
+        },
+        {
+          model: Timetable,
+          attributes: ['id', 'departure_time', 'arrival_time']
+        }
+      ],
+      order: [['journey_date', 'ASC'], ['departure_at', 'ASC']]
+    });
+
+    res.json({ journeys });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getJourney = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -69,5 +107,6 @@ const getJourney = async (req, res, next) => {
 
 module.exports = {
   searchJourneys,
+  getJourneysByRoute,
   getJourney
 };

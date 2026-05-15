@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
+import { apiClient } from '../../../services/apiClient';
 import {
   Ticket, Calendar, Search, TrendingUp, Users, DollarSign,
   CheckCircle, Bus, Film, XCircle, Clock, ChevronDown, ChevronUp,
@@ -24,21 +25,6 @@ interface BookingRecord {
   paymentStatus: 'paid' | 'pending' | 'failed';
 }
 
-const DEMO_BOOKINGS: BookingRecord[] = [
-  { id: 'BK-2026-001', customerName: 'Amina Juma', customerPhone: '+255 712 345 678', type: 'Transport', route: 'Dar es Salaam → Mwanza', date: '2026-05-10', time: '08:00', seats: 2, amount: 120000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-002', customerName: 'Grace Kimani', customerPhone: '+255 776 234 567', type: 'Facility', route: 'Simba SC vs Young Africans', date: '2026-05-12', time: '16:00', seats: 4, amount: 80000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-003', customerName: 'James Mbogo', customerPhone: '+255 713 456 789', type: 'Transport', route: 'Nairobi → Mombasa (SGR)', date: '2026-05-11', time: '07:30', seats: 1, amount: 45000, status: 'pending', paymentStatus: 'pending' },
-  { id: 'BK-2026-004', customerName: 'Fatuma Hassan', customerPhone: '+255 765 987 654', type: 'Facility', route: 'Avengers: Secret Wars', date: '2026-05-08', time: '19:30', seats: 3, amount: 45000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-005', customerName: 'Peter Kamau', customerPhone: '+255 787 654 321', type: 'Transport', route: 'Zanzibar → Dar es Salaam (Ferry)', date: '2026-05-09', time: '09:00', seats: 2, amount: 60000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-006', customerName: 'Neema Oloitipitip', customerPhone: '+255 744 123 456', type: 'Facility', route: 'Serengeti Safari 3-Day Package', date: '2026-05-15', time: '06:00', seats: 2, amount: 1400000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-007', customerName: 'David Mwangi', customerPhone: '+255 754 234 567', type: 'Transport', route: 'Kilimanjaro → Dar es Salaam (Air)', date: '2026-05-14', time: '11:45', seats: 1, amount: 350000, status: 'pending', paymentStatus: 'pending' },
-  { id: 'BK-2026-008', customerName: 'Sophia Osei', customerPhone: '+255 763 456 789', type: 'Facility', route: 'Afrobeats Night Live Concert', date: '2026-05-13', time: '20:00', seats: 5, amount: 375000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-009', customerName: 'Ali Hamisi', customerPhone: '+255 712 567 890', type: 'Transport', route: 'Dar es Salaam → Dodoma', date: '2026-05-07', time: '06:30', seats: 1, amount: 35000, status: 'cancelled', paymentStatus: 'failed' },
-  { id: 'BK-2026-010', customerName: 'Rose Mutua', customerPhone: '+255 776 678 901', type: 'Facility', route: 'Kilimanjaro Marangu Route', date: '2026-05-20', time: '05:30', seats: 2, amount: 960000, status: 'confirmed', paymentStatus: 'paid' },
-  { id: 'BK-2026-011', customerName: 'Ibrahim Musa', customerPhone: '+255 754 789 012', type: 'Transport', route: 'Arusha → Dar es Salaam (Bus)', date: '2026-05-06', time: '05:00', seats: 3, amount: 90000, status: 'completed', paymentStatus: 'paid' },
-  { id: 'BK-2026-012', customerName: 'Zawadi Njoroge', customerPhone: '+255 787 890 123', type: 'Facility', route: 'Business Summit 2026', date: '2026-05-18', time: '08:00', seats: 1, amount: 250000, status: 'confirmed', paymentStatus: 'paid' },
-];
-
 const statusConfig: Record<string, { label: string; bg: string; dot: string }> = {
   confirmed: { label: 'Confirmed', bg: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', dot: 'bg-green-500' },
   pending: { label: 'Pending', bg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', dot: 'bg-amber-500' },
@@ -58,12 +44,38 @@ export const BookingsOverview: React.FC = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [bookings, setBookings] = useState<BookingRecord[]>(DEMO_BOOKINGS);
+  const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  useEffect(() => {
+    const loadBookings = async () => {
+      try {
+        const response = await apiClient.get('/booking');
+        const transformedBookings = (response.data || []).map((b: any) => ({
+          id: b.id || b.booking_number || 'UNKNOWN',
+          customerName: b.customer_name || b.customerName || 'Unknown',
+          customerPhone: b.customer_phone || b.customerPhone || '',
+          type: b.type === 'transport' ? 'Transport' : 'Facility' as 'Transport' | 'Facility',
+          route: b.route || b.title || '',
+          date: b.date || new Date().toISOString().split('T')[0],
+          time: b.time || '00:00',
+          seats: b.seats || 0,
+          amount: b.amount || b.total_price || 0,
+          status: b.status || 'pending' as BookingRecord['status'],
+          paymentStatus: (b.payment_status || b.paymentStatus || 'pending') as 'paid' | 'pending' | 'failed',
+        }));
+        setBookings(transformedBookings);
+      } catch (error) {
+        console.error('Error loading bookings:', error);
+        setBookings([]);
+      }
+    };
+    loadBookings();
+  }, []);
 
   const handleStatusChange = (id: string, newStatus: BookingRecord['status']) => {
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));

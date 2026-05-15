@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Armchair, User } from 'lucide-react';
+import { useBooking } from '../../../contexts/BookingContext';
 
 interface SeatSelectorProps {
-  sittingPlan: string;
-  sittingLength: number;
+  sittingPlan?: string;
+  sittingLength?: number;
   selectedSeats: string[];
   onSeatsChange: (seats: string[]) => void;
   occupiedSeats?: string[];
+  heldSeats?: string[];
 }
 
 export const SeatSelector: React.FC<SeatSelectorProps> = ({
@@ -15,24 +17,31 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
   selectedSeats,
   onSeatsChange,
   occupiedSeats = [],
+  heldSeats = [],
 }) => {
+  const { remoteHeldSeats } = useBooking();
   const [seats, setSeats] = useState<string[][]>([]);
   const [lockedSeats, setLockedSeats] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const plan = sittingPlan.split('-').map(Number);
-    const rows: string[][]  = [];
+    const plan = (sittingPlan || '2-2')
+      .split('-')
+      .map(Number)
+      .filter((value) => !Number.isNaN(value) && value > 0);
+    const normalizedPlan = plan.length > 0 ? plan : [2, 2];
+    const rowsCount = sittingLength && sittingLength > 0 ? sittingLength : Math.max(6, normalizedPlan.reduce((sum, value) => sum + value, 0) * 5);
+    const rows: string[][] = [];
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-    for (let row = 0; row < sittingLength; row++) {
+    for (let row = 0; row < rowsCount; row++) {
       const rowSeats: string[] = [];
       let seatNumber = 1;
 
-      plan.forEach((section, sectionIndex) => {
+      normalizedPlan.forEach((section, sectionIndex) => {
         for (let i = 0; i < section; i++) {
           rowSeats.push(`${letters[row]}${seatNumber++}`);
         }
-        if (sectionIndex < plan.length - 1) {
+        if (sectionIndex < normalizedPlan.length - 1) {
           rowSeats.push('aisle');
         }
       });
@@ -54,7 +63,7 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
   }, [selectedSeats]);
 
   const handleSeatClick = (seat: string) => {
-    if (occupiedSeats.includes(seat) || lockedSeats.has(seat)) return;
+    if (seat === 'A1' || occupiedSeats.includes(seat) || heldSeats.includes(seat) || lockedSeats.has(seat) || remoteHeldSeats.has(seat)) return;
 
     if (selectedSeats.includes(seat)) {
       onSeatsChange(selectedSeats.filter(s => s !== seat));
@@ -67,6 +76,7 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
     if (seat === 'aisle') return '';
     if (seat === 'A1') return 'bg-yellow-500 cursor-not-allowed';
     if (occupiedSeats.includes(seat)) return 'bg-red-500 cursor-not-allowed';
+    if (heldSeats.includes(seat) || remoteHeldSeats.has(seat)) return 'bg-orange-400 cursor-not-allowed';
     if (selectedSeats.includes(seat)) return 'bg-green-500 cursor-pointer';
     return 'bg-blue-500 hover:bg-blue-600 cursor-pointer';
   };
@@ -75,7 +85,7 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
     <div className="bg-white dark:bg-gray-800 rounded-xl p-6">
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Select Your Seats</h2>
-        <div className="flex items-center gap-6 text-sm">
+        <div className="flex items-center gap-6 text-sm flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-500 rounded"></div>
             <span className="text-gray-700 dark:text-gray-300">Available</span>
@@ -87,6 +97,10 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-500 rounded"></div>
             <span className="text-gray-700 dark:text-gray-300">Occupied</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-orange-400 rounded"></div>
+            <span className="text-gray-700 dark:text-gray-300">Held</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-yellow-500 rounded"></div>
@@ -116,7 +130,7 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
                   <button
                     key={seatIndex}
                     onClick={() => handleSeatClick(seat)}
-                    disabled={occupiedSeats.includes(seat) || seat === 'A1'}
+                    disabled={occupiedSeats.includes(seat) || seat === 'A1' || remoteHeldSeats.has(seat)}
                     className={`w-12 h-12 rounded-lg flex items-center justify-center text-white transition-all ${getSeatColor(seat)}`}
                     title={seat}
                   >

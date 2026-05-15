@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useCurrency } from '../../../contexts/CurrencyContext';
-import { mockRoutes as initialRoutes, mockTransports, mockCompanies, Route, Station } from '../../../data/mockData';
+import { getRoutes } from '../../../services/managementService';
+import { getTransports } from '../../../services/adminService';
 import { Plus, MapPin, Edit, Trash2, Search, AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -14,11 +15,12 @@ export const RoutesManagement = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [routes, setRoutes] = useState<Route[]>(initialRoutes);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [transports, setTransports] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingRoute, setEditingRoute] = useState<Route | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<Route | null>(null);
+  const [editingRoute, setEditingRoute] = useState<any | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<any | null>(null);
 
   const [formData, setFormData] = useState({
     transportId: '',
@@ -26,36 +28,53 @@ export const RoutesManagement = () => {
     endLocation: '',
     price: 0,
     parentRouteId: '',
-    stations: [] as Station[],
+    stations: [] as any[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const filteredRoutes = routes.filter(route =>
-    route.startLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    route.endLocation.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRoutes = routes.filter(route => {
+    const start = (route.startLocation || route.originStation?.name || '').toLowerCase();
+    const end = (route.endLocation || route.destinationStation?.name || '').toLowerCase();
+    return start.includes(searchTerm.toLowerCase()) || end.includes(searchTerm.toLowerCase());
+  });
 
   const stats = {
     total: routes.length,
-    mainRoutes: routes.filter(r => !r.parentRouteId).length,
-    subRoutes: routes.filter(r => r.parentRouteId).length,
+    mainRoutes: routes.filter(r => !r.parent_route_id).length,
+    subRoutes: routes.filter(r => r.parent_route_id).length,
   };
 
-  const handleOpenModal = (route?: Route) => {
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [routeData, transportData] = await Promise.all([
+          getRoutes(),
+          getTransports(1, 100, ''),
+        ]);
+        setRoutes(routeData || []);
+        setTransports(transportData.transports || []);
+      } catch (error) {
+        console.error('Failed to load routes or transports', error);
+      }
+    };
+    load();
+  }, []);
+
+  const handleOpenModal = (route?: any) => {
     if (route) {
       setEditingRoute(route);
       setFormData({
-        transportId: route.transportId,
-        startLocation: route.startLocation,
-        endLocation: route.endLocation,
-        price: route.price,
-        parentRouteId: route.parentRouteId || '',
-        stations: [...route.stations],
+        transportId: route.transport_id || route.transportId || '',
+        startLocation: route.startLocation || route.originStation?.name || '',
+        endLocation: route.endLocation || route.destinationStation?.name || '',
+        price: route.base_price || route.price || 0,
+        parentRouteId: route.parent_route_id || route.parentRouteId || '',
+        stations: (route.RouteStations?.map((rs: any) => rs.station).filter(Boolean) || route.stations || []),
       });
     } else {
       setEditingRoute(null);
       setFormData({
-        transportId: mockTransports[0]?.id || '',
+        transportId: transports[0]?.id || '',
         startLocation: '',
         endLocation: '',
         price: 0,
@@ -242,8 +261,13 @@ export const RoutesManagement = () => {
       <div className="space-y-4">
         <AnimatePresence mode="popLayout">
           {filteredRoutes.map((route, index) => {
-            const transport = mockTransports.find(t => t.id === route.transportId);
-            const company = transport ? mockCompanies.find(c => c.id === transport.companyId) : null;
+            const transport = transports.find(t => t.id === (route.transport_id || route.transportId));
+            const company = transport?.Company || null;
+            const stations = (route.RouteStations?.map((rs: any) => rs.station).filter(Boolean) || route.stations || []);
+            const startLocation = route.startLocation || route.originStation?.name || 'Unknown';
+            const endLocation = route.endLocation || route.destinationStation?.name || 'Unknown';
+            const routePrice = route.base_price || route.price || 0;
+            const parentRouteId = route.parent_route_id || route.parentRouteId;
 
             return (
               <motion.div
@@ -266,20 +290,20 @@ export const RoutesManagement = () => {
                     </motion.div>
                     <div className="flex-1">
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-                        {route.startLocation} → {route.endLocation}
+                        {startLocation} → {endLocation}
                       </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                        {company?.name} • {transport?.name}
+                        {company?.name || 'Unknown company'} • {transport?.name || 'Unknown transport'}
                       </p>
                       <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                        <span>{route.stations.length} stations</span>
+                        <span>{stations.length} stations</span>
                         <span>•</span>
-                        <span>{route.stations.filter(s => s.isBreakStop).length} break stops</span>
+                        <span>{stations.filter((s: any) => s?.isBreakStop).length} break stops</span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-blue-600">{formatPrice(route.price)}</p>
+                    <p className="text-2xl font-bold text-blue-600">{formatPrice(routePrice)}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Full route</p>
                   </div>
                 </div>
@@ -287,7 +311,7 @@ export const RoutesManagement = () => {
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Stations:</h4>
                   <div className="flex flex-wrap gap-2">
-                    {route.stations.map((station, stationIndex) => (
+                    {stations.map((station: any, stationIndex: number) => (
                       <motion.div
                         key={station.id}
                         initial={{ opacity: 0, scale: 0.9 }}
@@ -306,7 +330,7 @@ export const RoutesManagement = () => {
                   </div>
                 </div>
 
-                {route.parentRouteId && (
+                {parentRouteId && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -382,8 +406,8 @@ export const RoutesManagement = () => {
                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">Select Transport</option>
-                    {mockTransports.map(t => (
-                      <option key={t.id} value={t.id}>{t.name} - {t.type}</option>
+                    {transports.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} - {t.TransportType?.slug || t.transport_type_id || 'unknown'}</option>
                     ))}
                   </select>
                   {errors.transportId && <p className="text-red-500 text-sm mt-1">{errors.transportId}</p>}
@@ -443,8 +467,8 @@ export const RoutesManagement = () => {
                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">No - Main Route</option>
-                    {routes.filter(r => r.id !== editingRoute?.id && !r.parentRouteId).map(r => (
-                      <option key={r.id} value={r.id}>{r.startLocation} → {r.endLocation}</option>
+                    {routes.filter(r => r.id !== editingRoute?.id && !r.parent_route_id && !r.parentRouteId).map(r => (
+                      <option key={r.id} value={r.id}>{r.startLocation || r.originStation?.name} → {r.endLocation || r.destinationStation?.name}</option>
                     ))}
                   </select>
                 </div>

@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { useCurrency } from '../../../contexts/CurrencyContext';
-import { mockTransports, mockRoutes, mockTimetables, mockCompanies } from '../../../data/mockData';
 import { SeatSelector } from '../../components/booking/SeatSelector';
 import { PaymentModal } from '../../components/booking/PaymentModal';
+import { getRoutes, getTimetables } from '../../../services/managementService';
+import { journeyService } from '../../../services/journeyService';
+import { bookingService, seatHoldService } from '../../../services/bookingService';
+import apiClient from '../../../services/apiClient';
 import { ArrowRight, ArrowLeft, Bus, Calendar, MapPin, Clock, Users } from 'lucide-react';
 
 type Step = 'transport' | 'route' | 'datetime' | 'seats' | 'details' | 'payment';
@@ -25,18 +28,97 @@ export const TransportBooking: React.FC = () => {
   const [startStation, setStartStation] = useState<string>('');
   const [endStation, setEndStation] = useState<string>('');
   const [showPayment, setShowPayment] = useState(false);
+  const [transports, setTransports] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [timetables, setTimetables] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [bookedSeats, setBookedSeats] = useState<string[]>([]);
+  const [heldSeats, setHeldSeats] = useState<string[]>([]);
+  const [passengerDetails, setPassengerDetails] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    idNumber: ''
+  });
 
-  const transport = selectedTransport ? mockTransports.find(t => t.id === selectedTransport) : null;
-  const route = selectedRoute ? mockRoutes.find(r => r.id === selectedRoute) : null;
-  const timetable = selectedTimetable ? mockTimetables.find(tt => tt.id === selectedTimetable) : null;
-  const company = transport ? mockCompanies.find(c => c.id === transport.companyId) : null;
+  // Derived state
+  const transport = selectedTransport ? transports.find(t => t.id === selectedTransport) : null;
+  const route = selectedRoute ? routes.find(r => r.id === selectedRoute) : null;
+  const timetable = selectedTimetable ? timetables.find(tt => tt.id === selectedTimetable) : null;
+  const company = transport ? companies.find(c => c.id === (transport.company_id || transport.companyId)) || transport.Company : null;
+
+  const transportTypeLabel = transport?.TransportType?.name || transport?.type || transportType || 'Unknown';
+  const transportSittingPlan = transport?.sittingPlan || transport?.seatLayout?.pattern || '2-2';
+  const transportSittingLength = transport?.sittingLength ?? transport?.seatLayout?.rows ?? Math.max(6, Math.ceil((transport?.capacity || 50) / 4));
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [transportsRes, routesRes, companiesRes] = await Promise.all([
+          apiClient.get('/transports', { params: { transport_type_slug: transportType } }),
+          getRoutes(),
+          apiClient.get('/companies')
+        ]);
+        const transportsData = transportsRes.data.transports || transportsRes.data.data || [];
+        const companiesData = companiesRes.data.companies || companiesRes.data.data || [];
+        setTransports(transportsData);
+        setRoutes(routesRes || []);
+        setCompanies(companiesData);
+      } catch (error) {
+        console.error('Error loading booking data:', error);
+      }
+    };
+    loadData();
+  }, [transportType]);
+
+  useEffect(() => {
+    const loadTimetables = async () => {
+      if (selectedRoute && selectedTransport) {
+        try {
+          const timetablesRes = await getTimetables(selectedRoute, selectedTransport);
+          setTimetables(timetablesRes || []);
+        } catch (error) {
+          console.error('Error loading timetables:', error);
+          setTimetables([]);
+        }
+      } else {
+        setTimetables([]);
+      }
+    };
+    loadTimetables();
+  }, [selectedRoute, selectedTransport]);
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      if (!selectedTimetable) {
+        setBookedSeats([]);
+        setHeldSeats([]);
+        return;
+      }
+
+      try {
+        const availability = await journeyService.getAvailability(selectedTimetable);
+        const booked = availability?.seatMap?.filter((seat: any) => seat.status === 'booked').map((seat: any) => seat.code) || [];
+        const held = availability?.seatMap?.filter((seat: any) => seat.status === 'held').map((seat: any) => seat.code) || [];
+        setBookedSeats(booked);
+        setHeldSeats(held);
+      } catch (error) {
+        console.error('Error loading journey availability:', error);
+        setBookedSeats([]);
+        setHeldSeats([]);
+      }
+    };
+    loadAvailability();
+  }, [selectedTimetable]);
 
   const calculatePrice = () => {
     if (!route) return 0;
-    const startIdx = route.stations.findIndex(s => s.name === startStation);
-    const endIdx = route.stations.findIndex(s => s.name === endStation);
-    if (startIdx === -1 || endIdx === -1) return route.price;
-    return route.stations[endIdx].price - (startIdx > 0 ? route.stations[startIdx - 1].price : 0);
+    const routeStations = (route.RouteStations?.map((rs: any) => rs.station).filter(Boolean) || route.stations || []);
+    const startIdx = routeStations.findIndex((s: any) => s.name === startStation);
+    const endIdx = routeStations.findIndex((s: any) => s.name === endStation);
+    const routePrice = route.base_price || route.price || 0;
+    if (startIdx === -1 || endIdx === -1) return routePrice;
+    return routePrice;
   };
 
   const totalPrice = calculatePrice() * selectedSeats.length;
@@ -77,10 +159,10 @@ export const TransportBooking: React.FC = () => {
 
       {currentStep === 'transport' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockTransports
-            .filter(t => allowedTypes.length === 0 || allowedTypes.includes(t.type))
+          {transports
+            .filter(t => true) // Temporarily show all transports for debugging
             .map((transport) => {
-            const company = mockCompanies.find(c => c.id === transport.companyId);
+            const company = companies.find(c => c.id === (transport.company_id || transport.companyId)) || transport.Company;
             return (
               <button
                 key={transport.id}
@@ -101,9 +183,9 @@ export const TransportBooking: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                  <p>Type: {t(`transportTypes.${transport.type}`)}</p>
+                  <p>Type: {transportTypeLabel}</p>
                   <p>Capacity: {transport.capacity} seats</p>
-                  <p>Layout: {transport.sittingPlan}</p>
+                  <p>Layout: {transportSittingPlan}</p>
                 </div>
               </button>
             );
@@ -113,13 +195,22 @@ export const TransportBooking: React.FC = () => {
 
       {currentStep === 'route' && transport && (
         <div className="space-y-4">
-          {mockRoutes.filter(r => r.transportId === transport.id).map((route) => (
+          {routes.filter(r => (r.transport_id || r.transportId) === transport.id).map((route) => {
+            const routeStations = (route.RouteStations?.map((rs: any) => rs.station).filter(Boolean) || route.stations || []);
+            const fallbackStations = routeStations.length > 0 ? routeStations : [
+              { id: `${route.id}-origin`, name: route.originStation?.name || 'Origin' },
+              { id: `${route.id}-destination`, name: route.destinationStation?.name || 'Destination' }
+            ];
+            const startLoc = route.startLocation || route.originStation?.name || 'Unknown';
+            const endLoc = route.endLocation || route.destinationStation?.name || 'Unknown';
+            const routePrice = route.base_price || route.price || 0;
+            return (
             <button
               key={route.id}
               onClick={() => {
                 setSelectedRoute(route.id);
-                setStartStation(route.startLocation);
-                setEndStation(route.endLocation);
+                setStartStation(startLoc);
+                setEndStation(endLoc);
               }}
               className={`w-full bg-white dark:bg-gray-800 rounded-xl p-6 text-left border-2 transition-all ${
                 selectedRoute === route.id
@@ -132,19 +223,19 @@ export const TransportBooking: React.FC = () => {
                   <MapPin className="w-6 h-6 text-blue-500" />
                   <div>
                     <h3 className="font-bold text-gray-900 dark:text-white text-lg">
-                      {route.startLocation} → {route.endLocation}
+                      {startLoc} → {endLoc}
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {route.stations.length} stations
+                      {fallbackStations.length} stations
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-blue-500">{formatPrice(route.price)}</p>
+                  <p className="text-2xl font-bold text-blue-500">{formatPrice(routePrice)}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {route.stations.map((station) => (
+                {fallbackStations.map((station: any) => (
                   <span
                     key={station.id}
                     className={`px-3 py-1 rounded-full text-sm ${
@@ -158,13 +249,14 @@ export const TransportBooking: React.FC = () => {
                 ))}
               </div>
             </button>
-          ))}
+          );
+          })}
         </div>
       )}
 
       {currentStep === 'datetime' && route && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {mockTimetables.filter(tt => tt.routeId === route.id).map((timetable) => (
+          {timetables.map((timetable) => (
             <button
               key={timetable.id}
               onClick={() => setSelectedTimetable(timetable.id)}
@@ -177,18 +269,20 @@ export const TransportBooking: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Calendar className="w-5 h-5 text-blue-500" />
-                  <span className="font-bold text-gray-900 dark:text-white">{timetable.date}</span>
+                  <span className="font-bold text-gray-900 dark:text-white">
+                    {new Date(timetable.journey_date).toLocaleDateString()}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Clock className="w-5 h-5 text-blue-500" />
                   <span className="text-gray-700 dark:text-gray-300">
-                    {timetable.startTime} - {timetable.endTime}
+                    {timetable.Timetable?.departure_time} - {timetable.Timetable?.arrival_time}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Users className="w-5 h-5 text-green-500" />
                   <span className="text-gray-700 dark:text-gray-300">
-                    {timetable.availableSeats} seats available
+                    {timetable.available_seats} seats available
                   </span>
                 </div>
               </div>
@@ -200,11 +294,12 @@ export const TransportBooking: React.FC = () => {
       {currentStep === 'seats' && transport && (
         <div>
           <SeatSelector
-            sittingPlan={transport.sittingPlan}
-            sittingLength={transport.sittingLength}
+            sittingPlan={transportSittingPlan}
+            sittingLength={transportSittingLength}
             selectedSeats={selectedSeats}
             onSeatsChange={setSelectedSeats}
-            occupiedSeats={['A1', 'B3', 'C2']}
+            occupiedSeats={bookedSeats}
+            heldSeats={heldSeats}
           />
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl p-6">
             <div className="flex items-center justify-between">
@@ -230,21 +325,29 @@ export const TransportBooking: React.FC = () => {
             <input
               type="text"
               placeholder="Full Name"
+              value={passengerDetails.fullName}
+              onChange={(e) => setPassengerDetails(prev => ({ ...prev, fullName: e.target.value }))}
               className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
             />
             <input
               type="email"
               placeholder="Email"
+              value={passengerDetails.email}
+              onChange={(e) => setPassengerDetails(prev => ({ ...prev, email: e.target.value }))}
               className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
             />
             <input
               type="tel"
               placeholder="Phone"
+              value={passengerDetails.phone}
+              onChange={(e) => setPassengerDetails(prev => ({ ...prev, phone: e.target.value }))}
               className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
             />
             <input
               type="text"
               placeholder="ID Number"
+              value={passengerDetails.idNumber}
+              onChange={(e) => setPassengerDetails(prev => ({ ...prev, idNumber: e.target.value }))}
               className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
             />
           </div>
@@ -280,7 +383,46 @@ export const TransportBooking: React.FC = () => {
         <PaymentModal
           amount={totalPrice}
           onClose={() => setShowPayment(false)}
-          onSuccess={() => navigate('/tickets')}
+          onSubmit={async (paymentPayload) => {
+            try {
+              // First hold the seats
+              await seatHoldService.holdSeats(selectedTimetable, selectedSeats);
+              
+              // Create booking items for each seat
+              const bookingItems = selectedSeats.map(seatCode => ({
+                passenger_name: passengerDetails.fullName,
+                passenger_type: 'adult',
+                unit_price: calculatePrice(),
+                seat_code: seatCode
+              }));
+              
+              // Create the booking
+              const bookingData = {
+                journey_id: selectedTimetable,
+                seat_codes: selectedSeats,
+                booking_type: 'transport',
+                items: bookingItems,
+                total_amount: totalPrice,
+                passenger_count: selectedSeats.length,
+                contact_name: passengerDetails.fullName,
+                contact_phone: passengerDetails.phone,
+                contact_email: passengerDetails.email,
+                notes: `ID: ${passengerDetails.idNumber}`
+              };
+              
+              await bookingService.createBooking(bookingData);
+              
+              // Simulate payment processing
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              
+              setShowPayment(false);
+              navigate('/tickets');
+            } catch (error) {
+              console.error('Booking creation failed:', error);
+              alert('Booking failed. Please try again.');
+              throw error;
+            }
+          }}
         />
       )}
     </div>

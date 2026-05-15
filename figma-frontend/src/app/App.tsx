@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { ThemeProvider } from 'next-themes';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { BookingProvider } from '../contexts/BookingContext';
 import { CurrencyProvider } from '../contexts/CurrencyContext';
 import { SystemLogsProvider } from '../contexts/SystemLogsContext';
 import '../i18n/config';
@@ -10,6 +11,7 @@ import { Register } from './pages/Auth/Register';
 import { CustomerDashboard } from './pages/Dashboard/CustomerDashboard';
 import { TransportTypeSelection } from './pages/Booking/TransportTypeSelection';
 import { TransportBooking } from './pages/Booking/TransportBooking';
+import { TransportBookingAPI } from './pages/Booking/TransportBookingAPI';
 import { FacilityBooking } from './pages/Booking/FacilityBooking';
 import { TicketsPage } from './pages/Customer/TicketsPage';
 import { CompaniesPage } from './pages/Admin/CompaniesPage';
@@ -66,6 +68,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <TransportBooking />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/bookings/transport-api"
+        element={
+          <ProtectedRoute>
+            <TransportBookingAPI />
           </ProtectedRoute>
         }
       />
@@ -186,9 +196,11 @@ export default function App() {
       <AuthProvider>
         <SystemLogsProvider>
           <CurrencyProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
+            <BookingProvider>
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </BookingProvider>
           </CurrencyProvider>
         </SystemLogsProvider>
       </AuthProvider>

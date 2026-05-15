@@ -30,7 +30,7 @@ const login = async (req, res, next) => {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
-    res.json({ user, accessToken });
+    res.json({ user, accessToken, refreshToken });
   } catch (error) {
     next(error);
   }
@@ -47,7 +47,7 @@ const refresh = async (req, res, next) => {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
-    res.json({ user, accessToken });
+    res.json({ user, accessToken, refreshToken: newRefreshToken });
   } catch (error) {
     next(error);
   }

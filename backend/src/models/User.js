@@ -11,15 +11,13 @@ module.exports = (sequelize) => {
     email: {
       type: DataTypes.STRING(255),
       allowNull: false,
-      unique: true,
       validate: {
         isEmail: true
       }
     },
     phone: {
       type: DataTypes.STRING(20),
-      allowNull: false,
-      unique: true
+      allowNull: false
     },
     password_hash: {
       type: DataTypes.STRING(255),
@@ -72,8 +70,6 @@ module.exports = (sequelize) => {
   }, {
     tableName: 'users',
     indexes: [
-      { fields: ['email'] },
-      { fields: ['phone'] },
       { fields: ['status'] }
     ],
     hooks: {

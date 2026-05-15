@@ -1,12 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import {
-  mockTimetables, mockRoutes, mockTransports, mockCompanies,
-  mockActivities, mockFacilities, Timetable
-} from '../../../data/mockData';
+import { getTimetables, getRoutes, getActivities } from '../../../services/managementService';
 import {
   Plus, Calendar, Clock, Edit, Trash2, Search, Bus, Film,
   X, AlertTriangle, CheckCircle2, ChevronRight, Users,
@@ -54,14 +51,16 @@ export const TimetablesManagement: React.FC = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [timetables, setTimetables] = useState<Timetable[]>([...mockTimetables]);
+  const [timetables, setTimetables] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'transport' | 'facility'>('all');
 
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'transport' | 'facility'>('transport');
-  const [editTarget, setEditTarget] = useState<Timetable | null>(null);
-  const [form, setForm] = useState<Partial<Timetable>>(emptyForm());
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [form, setForm] = useState<any>(emptyForm());
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [deleteTarget, setDeleteTarget] = useState<Timetable | null>(null);
@@ -72,17 +71,39 @@ export const TimetablesManagement: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const getTimetableLabel = (tt: Timetable) => {
-    if (tt.routeId) {
-      const route = mockRoutes.find(r => r.id === tt.routeId);
-      return route ? `${route.startLocation} → ${route.endLocation}` : 'Unknown Route';
+  const getTimetableLabel = (tt: any) => {
+    const routeId = tt.routeId || tt.route_id;
+    const activityId = tt.activityId || tt.activity_id;
+    if (routeId) {
+      const route = routes.find(r => r.id === routeId);
+      const start = route?.startLocation || route?.originStation?.name || 'Unknown';
+      const end = route?.endLocation || route?.destinationStation?.name || 'Unknown';
+      return `${start} → ${end}`;
     }
-    if (tt.activityId) {
-      const activity = mockActivities.find(a => a.id === tt.activityId);
+    if (activityId) {
+      const activity = activities.find(a => a.id === activityId);
       return activity?.name || 'Unknown Activity';
     }
     return 'Unknown';
   };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [ttData, routeData, activityData] = await Promise.all([
+          getTimetables(),
+          getRoutes(),
+          getActivities(),
+        ]);
+        setTimetables(ttData || []);
+        setRoutes(routeData || []);
+        setActivities(activityData || []);
+      } catch (error) {
+        console.error('Failed to load timetables, routes, or activities', error);
+      }
+    };
+    loadData();
+  }, []);
 
   const openAdd = (type: 'transport' | 'facility') => {
     setModalType(type);
@@ -92,10 +113,15 @@ export const TimetablesManagement: React.FC = () => {
     setShowModal(true);
   };
 
-  const openEdit = (tt: Timetable) => {
+  const openEdit = (tt: any) => {
     setEditTarget(tt);
-    setModalType(tt.routeId ? 'transport' : 'facility');
-    setForm({ ...tt });
+    const hasRoute = !!(tt.routeId || tt.route_id);
+    setModalType(hasRoute ? 'transport' : 'facility');
+    setForm({
+      ...tt,
+      routeId: tt.routeId || tt.route_id || '',
+      activityId: tt.activityId || tt.activity_id || '',
+    });
     setFormErrors({});
     setShowModal(true);
   };
@@ -114,14 +140,14 @@ export const TimetablesManagement: React.FC = () => {
 
   const handleSave = () => {
     if (!validate()) return;
-    const label = editTarget ? getTimetableLabel(editTarget) : getTimetableLabel(form as Timetable);
+    const label = editTarget ? getTimetableLabel(editTarget) : getTimetableLabel(form);
     if (editTarget) {
-      setTimetables(prev => prev.map(tt => tt.id === editTarget.id ? { ...editTarget, ...form } as Timetable : tt));
+      setTimetables(prev => prev.map(tt => tt.id === editTarget.id ? { ...editTarget, ...form } : tt));
       addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Edited timetable: ${label}`, module: 'Timetables', status: 'success', details: label });
       showToast('Schedule updated successfully');
     } else {
-      const newTt: Timetable = {
-        ...(form as Timetable),
+      const newTt = {
+        ...form,
         id: `tt_${Date.now()}`,
         routeId: modalType === 'transport' ? form.routeId : undefined,
         activityId: modalType === 'facility' ? form.activityId : undefined,
@@ -145,9 +171,11 @@ export const TimetablesManagement: React.FC = () => {
   const filtered = timetables.filter(tt => {
     const label = getTimetableLabel(tt).toLowerCase();
     const matchSearch = label.includes(searchTerm.toLowerCase());
+    const routeId = tt.routeId || tt.route_id;
+    const activityId = tt.activityId || tt.activity_id;
     const matchType = filterType === 'all' ||
-      (filterType === 'transport' && !!tt.routeId) ||
-      (filterType === 'facility' && !!tt.activityId);
+      (filterType === 'transport' && !!routeId) ||
+      (filterType === 'facility' && !!activityId);
     return matchSearch && matchType;
   });
 
@@ -234,20 +262,20 @@ export const TimetablesManagement: React.FC = () => {
             let color = 'from-blue-500 to-blue-600';
             let icon = <Bus className="w-5 h-5 text-white" />;
 
-            if (tt.routeId) {
-              const route = mockRoutes.find(r => r.id === tt.routeId);
-              const transport = route ? mockTransports.find(t => t.id === route.transportId) : null;
-              const company = transport ? mockCompanies.find(c => c.id === transport.companyId) : null;
-              title = route ? `${route.startLocation} → ${route.endLocation}` : 'Unknown Route';
-              subtitle = [company?.name, transport?.name].filter(Boolean).join(' · ');
-              icon = <span className="text-white">{transportIcon(transport?.type || '')}</span>;
+            const routeId = tt.routeId || tt.route_id;
+            const activityId = tt.activityId || tt.activity_id;
+
+            if (routeId) {
+              const route = routes.find(r => r.id === routeId);
+              const startLoc = route?.startLocation || route?.originStation?.name || 'Unknown';
+              const endLoc = route?.endLocation || route?.destinationStation?.name || 'Unknown';
+              title = `${startLoc} → ${endLoc}`;
+              subtitle = route?.Transport?.name || 'Unknown transport';
               color = 'from-blue-500 to-cyan-600';
-            } else if (tt.activityId) {
-              const activity = mockActivities.find(a => a.id === tt.activityId);
-              const facility = activity ? mockFacilities.find(f => f.id === activity.facilityId) : null;
-              const company = facility ? mockCompanies.find(c => c.id === facility.companyId) : null;
+            } else if (activityId) {
+              const activity = activities.find(a => a.id === activityId);
               title = activity?.name || 'Unknown Activity';
-              subtitle = [company?.name, facility?.name].filter(Boolean).join(' · ');
+              subtitle = activity?.Facility?.name || activity?.facility_id || 'Unknown facility';
               icon = <Film className="w-5 h-5 text-white" />;
               color = 'from-purple-500 to-pink-600';
             }
@@ -364,12 +392,13 @@ export const TimetablesManagement: React.FC = () => {
                     <select value={form.routeId || ''} onChange={e => setForm(f => ({ ...f, routeId: e.target.value }))}
                       className={`w-full px-3 py-2.5 border rounded-lg dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none ${formErrors.routeId ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'}`}>
                       <option value="">Select Route</option>
-                      {mockRoutes.map(r => {
-                        const transport = mockTransports.find(t => t.id === r.transportId);
-                        const company = transport ? mockCompanies.find(c => c.id === transport.companyId) : null;
+                      {routes.map(r => {
+                        const startLoc = r.startLocation || r.originStation?.name || 'Unknown';
+                        const endLoc = r.endLocation || r.destinationStation?.name || 'Unknown';
+                        const company = r.Company?.name || 'Unknown Company';
                         return (
                           <option key={r.id} value={r.id}>
-                            {r.startLocation} → {r.endLocation} ({company?.name})
+                            {startLoc} → {endLoc} ({company})
                           </option>
                         );
                       })}
@@ -382,11 +411,11 @@ export const TimetablesManagement: React.FC = () => {
                     <select value={form.activityId || ''} onChange={e => setForm(f => ({ ...f, activityId: e.target.value }))}
                       className={`w-full px-3 py-2.5 border rounded-lg dark:bg-gray-700 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none ${formErrors.activityId ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'}`}>
                       <option value="">Select Activity</option>
-                      {mockActivities.map(a => {
-                        const facility = mockFacilities.find(f => f.id === a.facilityId);
+                      {activities.map(a => {
+                        const facility = a.Facility?.name || a.facility_id || 'Unknown';
                         return (
                           <option key={a.id} value={a.id}>
-                            {a.name} ({facility?.name})
+                            {a.name} ({facility})
                           </option>
                         );
                       })}

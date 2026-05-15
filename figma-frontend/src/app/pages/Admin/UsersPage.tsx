@@ -1,37 +1,21 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth, UserRole } from '../../../contexts/AuthContext';
 import {
   Plus, Edit, Trash2, Search, X, AlertTriangle, CheckCircle2,
-  Users as UsersIcon, Shield, Mail, Phone, User, Eye, EyeOff, Ban
+  Users as UsersIcon, Shield, Mail, Phone, Eye, EyeOff, Ban, Loader2
 } from 'lucide-react';
+import { getUsers, createUser, updateUser, deleteUser } from '../../../services/adminService';
+import type { User } from '../../../services/adminService';
 
-interface UserAccount {
-  id: string;
-  email: string;
-  fullName: string;
-  phone: string;
-  role: UserRole;
-  status: 'active' | 'suspended' | 'inactive';
-  companyId?: string;
-  avatar?: string;
-  createdAt: string;
+interface UserAccount extends User {
+  fullName?: string; // Computed from first_name + last_name
+  role?: string; // Derived from Roles
 }
 
-const MOCK_USERS: UserAccount[] = [
-  { id: 'u1', email: 'dev@system.co.tz', fullName: 'System Developer', phone: '+255 700 000 001', role: 'developer', status: 'active', createdAt: '2025-01-01' },
-  { id: 'u2', email: 'admin@booknow.co.tz', fullName: 'Super Administrator', phone: '+255 700 000 002', role: 'super_admin', status: 'active', createdAt: '2025-01-02' },
-  { id: 'u3', email: 'manager@kiliexpress.co.tz', fullName: 'Baraka Mwenda', phone: '+255 712 111 222', role: 'company_admin', status: 'active', companyId: 'c1', createdAt: '2025-01-05' },
-  { id: 'u4', email: 'staff@kiliexpress.co.tz', fullName: 'Naomi Ochieng', phone: '+255 754 333 444', role: 'staff', status: 'active', companyId: 'c1', createdAt: '2025-01-10' },
-  { id: 'u5', email: 'amina.juma@gmail.com', fullName: 'Amina Juma', phone: '+255 712 345 678', role: 'customer', status: 'active', createdAt: '2025-02-01' },
-  { id: 'u6', email: 'grace.kimani@gmail.com', fullName: 'Grace Kimani', phone: '+255 776 234 567', role: 'customer', status: 'active', createdAt: '2025-02-15' },
-  { id: 'u7', email: 'james.mbogo@gmail.com', fullName: 'James Mbogo', phone: '+255 713 456 789', role: 'customer', status: 'active', createdAt: '2025-03-01' },
-  { id: 'u8', email: 'fatuma.hassan@gmail.com', fullName: 'Fatuma Hassan', phone: '+255 765 987 654', role: 'customer', status: 'suspended', createdAt: '2025-03-10' },
-  { id: 'u9', email: 'staff2@azammarine.co.tz', fullName: 'Peter Kamau', phone: '+255 787 654 321', role: 'staff', status: 'active', companyId: 'c10', createdAt: '2025-03-15' },
-  { id: 'u10', email: 'manager@serengeti.co.tz', fullName: 'Neema Oloitipitip', phone: '+255 744 123 456', role: 'company_admin', status: 'active', companyId: 'c11', createdAt: '2025-04-01' },
-];
+const MOCK_USERS: UserAccount[] = [];
 
 const ROLES: UserRole[] = ['customer', 'staff', 'company_admin', 'super_admin', 'developer'];
 
@@ -50,8 +34,10 @@ const statusColors: Record<string, string> = {
 };
 
 const emptyForm = (): Partial<UserAccount> & { password?: string } => ({
-  email: '',
   fullName: '',
+  email: '',
+  first_name: '',
+  last_name: '',
   phone: '',
   role: 'customer',
   status: 'active',
@@ -63,7 +49,8 @@ export const UsersPage: React.FC = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [users, setUsers] = useState<UserAccount[]>(MOCK_USERS);
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -73,9 +60,41 @@ export const UsersPage: React.FC = () => {
   const [form, setForm] = useState<Partial<UserAccount> & { password?: string }>(emptyForm());
   const [showPassword, setShowPassword] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<UserAccount | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  // Load users on component mount
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await getUsers(1, 100, searchTerm);
+      const processedUsers = (response.users || []).map((user: User) => ({
+        ...user,
+        fullName: `${user.first_name} ${user.last_name}`,
+        role: user.Roles?.[0]?.slug || 'customer'
+      }));
+      setUsers(processedUsers);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      showToast('Failed to load users', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reload users when search term changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      loadUsers();
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -102,51 +121,87 @@ export const UsersPage: React.FC = () => {
 
   const validate = () => {
     const errs: Record<string, string> = {};
+    if (!form.fullName?.trim()) errs.fullName = 'Full name is required';
     if (!form.email?.trim()) errs.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email format';
-    if (!form.fullName?.trim()) errs.fullName = 'Full name is required';
     if (!form.phone?.trim()) errs.phone = 'Phone is required';
     if (!editTarget && !form.password?.trim()) errs.password = 'Password is required';
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    if (editTarget) {
-      setUsers(prev => prev.map(u => u.id === editTarget.id ? { ...editTarget, ...form, password: undefined } as UserAccount : u));
-      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Updated user: ${form.email}`, module: 'Users', status: 'success', details: form.email });
-      showToast(`User "${form.fullName}" updated successfully`);
-    } else {
-      const newUser: UserAccount = {
-        ...(form as UserAccount),
-        id: `u_${Date.now()}`,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      setUsers(prev => [newUser, ...prev]);
-      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created user: ${form.email}`, module: 'Users', status: 'success', details: form.email });
-      showToast(`User "${form.fullName}" created successfully`);
+    setSaving(true);
+    const fullName = (form.fullName || '').trim();
+    const [first_name, ...rest] = fullName.split(/\s+/);
+    const last_name = rest.join(' ') || first_name;
+
+    try {
+      if (editTarget) {
+        await updateUser(editTarget.id, {
+          email: form.email,
+          first_name,
+          last_name,
+          phone: form.phone,
+          role_slug: form.role,
+          status: form.status,
+          company_id: form.company_id,
+        });
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Updated user: ${form.email}`, module: 'Users', status: 'success', details: form.email });
+        showToast(`User "${fullName}" updated successfully`);
+      } else {
+        await createUser({
+          email: form.email!,
+          first_name,
+          last_name,
+          phone: form.phone!,
+          role_slug: form.role!,
+          password: form.password!,
+          company_id: form.company_id,
+        });
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created user: ${form.email}`, module: 'Users', status: 'success', details: form.email });
+        showToast(`User "${fullName}" created successfully`);
+      }
+      setShowModal(false);
+      loadUsers(); // Reload users after save
+    } catch (error: any) {
+      console.error('Error saving user:', error);
+      showToast(error.response?.data?.message || 'Failed to save user', 'error');
+    } finally {
+      setSaving(false);
     }
-    setShowModal(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
-    addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Deleted user: ${deleteTarget.email}`, module: 'Users', status: 'success', details: deleteTarget.email });
-    showToast(`User "${deleteTarget.fullName}" deleted`);
-    setDeleteTarget(null);
+    try {
+      await deleteUser(deleteTarget.id);
+      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Deleted user: ${deleteTarget.email}`, module: 'Users', status: 'success', details: deleteTarget.email });
+      showToast(`User "${deleteTarget.fullName}" deleted`);
+      setDeleteTarget(null);
+      loadUsers(); // Reload users after delete
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      showToast(error.response?.data?.message || 'Failed to delete user', 'error');
+    }
   };
 
-  const toggleStatus = (u: UserAccount) => {
+  const toggleStatus = async (u: UserAccount) => {
     const newStatus = u.status === 'active' ? 'suspended' : 'active';
-    setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, status: newStatus } : usr));
-    addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `${newStatus === 'suspended' ? 'Suspended' : 'Activated'} user: ${u.email}`, module: 'Users', status: 'warning', details: u.email });
-    showToast(`User ${newStatus === 'suspended' ? 'suspended' : 'activated'}`);
+    try {
+      await updateUser(u.id, { status: newStatus });
+      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `${newStatus === 'suspended' ? 'Suspended' : 'Activated'} user: ${u.email}`, module: 'Users', status: 'warning', details: u.email });
+      showToast(`User ${newStatus === 'suspended' ? 'suspended' : 'activated'}`);
+      loadUsers(); // Reload users after status change
+    } catch (error: any) {
+      console.error('Error updating user status:', error);
+      showToast(error.response?.data?.message || 'Failed to update user status', 'error');
+    }
   };
 
   const filtered = users.filter(u => {
-    const matchSearch = u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.phone.includes(searchTerm);
     const matchRole = filterRole === 'all' || u.role === filterRole;
@@ -193,7 +248,7 @@ export const UsersPage: React.FC = () => {
           { label: 'Total Users', value: stats.total, color: 'from-blue-500 to-cyan-600', icon: <UsersIcon className="w-6 h-6" /> },
           { label: 'Active', value: stats.active, color: 'from-green-500 to-emerald-600', icon: <CheckCircle2 className="w-6 h-6" /> },
           { label: 'Suspended', value: stats.suspended, color: 'from-red-500 to-rose-600', icon: <Ban className="w-6 h-6" /> },
-          { label: 'Customers', value: stats.customers, color: 'from-purple-500 to-pink-600', icon: <User className="w-6 h-6" /> },
+          { label: 'Customers', value: stats.customers, color: 'from-purple-500 to-pink-600', icon: <UsersIcon className="w-6 h-6" /> },
         ].map(s => (
           <motion.div key={s.label} whileHover={{ y: -2 }}
             className={`bg-gradient-to-br ${s.color} rounded-xl p-4 text-white shadow-md`}>
@@ -234,7 +289,13 @@ export const UsersPage: React.FC = () => {
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <span className="ml-2 text-gray-600 dark:text-gray-400">Loading users...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
@@ -247,8 +308,15 @@ export const UsersPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              <AnimatePresence initial={false}>
-                {filtered.map((u, i) => (
+              <>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                      {searchTerm || filterRole !== 'all' || filterStatus !== 'all' ? 'No users match your filters' : 'No users found'}
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((u, i) => (
                   <motion.tr key={u.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -258,7 +326,7 @@ export const UsersPage: React.FC = () => {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
-                          {getInitials(u.fullName)}
+                          {getInitials(u.fullName || '')}
                         </div>
                         <div>
                           <p className="font-medium text-gray-900 dark:text-white text-sm">{u.fullName}</p>
@@ -302,25 +370,27 @@ export const UsersPage: React.FC = () => {
                       </div>
                     </td>
                   </motion.tr>
-                ))}
-              </AnimatePresence>
+                  ))
+                )}
+              </>
             </tbody>
           </table>
         </div>
-
-        {filtered.length === 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="text-center py-12 text-gray-400 dark:text-gray-500">
-            <UsersIcon className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="font-medium">No users found</p>
-          </motion.div>
         )}
+      </div>
 
-        <div className="px-5 py-3 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Showing <strong className="text-gray-700 dark:text-gray-300">{filtered.length}</strong> of <strong className="text-gray-700 dark:text-gray-300">{users.length}</strong> users
-          </p>
-        </div>
+            <div className="px-5 py-3 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Showing{' '}
+          <strong className="text-gray-700 dark:text-gray-300">
+            {filtered.length}
+          </strong>{' '}
+          of{' '}
+          <strong className="text-gray-700 dark:text-gray-300">
+            {users.length}
+          </strong>{' '}
+          users
+        </p>
       </div>
 
       <AnimatePresence>
@@ -403,9 +473,10 @@ export const UsersPage: React.FC = () => {
                     className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors">
                     Cancel
                   </button>
-                  <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium transition-colors shadow-md">
-                    {editTarget ? 'Save Changes' : 'Create User'}
+                  <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving}
+                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors shadow-md flex items-center justify-center gap-2">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {saving ? 'Saving...' : (editTarget ? 'Save Changes' : 'Create User')}
                   </motion.button>
                 </div>
               </div>

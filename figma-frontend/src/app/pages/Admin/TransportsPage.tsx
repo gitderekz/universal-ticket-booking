@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { mockTransports as initialTransports, mockCompanies, Transport } from '../../../data/mockData';
+import { getTransports, getCompanies, Company, Transport } from '../../../services/adminService';
 import { Plus, Bus, Edit, Trash2, Search, AlertTriangle, X, Plane, Ship, Train } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -23,7 +23,8 @@ export const TransportsPage = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [transports, setTransports] = useState<Transport[]>(initialTransports);
+  const [transports, setTransports] = useState<Transport[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -33,7 +34,7 @@ export const TransportsPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     companyId: '',
-    type: 'bus' as Transport['type'],
+    type: 'bus' as string,
     sittingPlan: '',
     sittingLength: 0,
     capacity: 0,
@@ -44,32 +45,47 @@ export const TransportsPage = () => {
 
   const filteredTransports = transports.filter(transport => {
     const matchesSearch = transport.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || transport.type === filterType;
+    const transportTypeSlug = transport.TransportType?.slug || transport.transport_type_id || '';
+    const matchesType = filterType === 'all' || transportTypeSlug === filterType;
     return matchesSearch && matchesType;
   });
 
   const stats = {
     total: transports.length,
-    active: transports.length,
-    totalCapacity: transports.reduce((sum, t) => sum + t.capacity, 0),
+    active: transports.filter(t => t.status === 'active').length,
+    totalCapacity: transports.reduce((sum, t) => sum + (t.capacity || 0), 0),
   };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const transportData = await getTransports(1, 100, '');
+        setTransports(transportData.transports || []);
+        const companyData = await getCompanies(1, 100, '');
+        setCompanies(companyData.companies || []);
+      } catch (error) {
+        console.error('Failed to load transports or companies', error);
+      }
+    };
+    loadData();
+  }, []);
 
   const handleOpenModal = (transport?: Transport) => {
     if (transport) {
       setEditingTransport(transport);
       setFormData({
         name: transport.name,
-        companyId: transport.companyId,
-        type: transport.type,
-        sittingPlan: transport.sittingPlan,
-        sittingLength: transport.sittingLength,
-        capacity: transport.capacity,
+        companyId: transport.company_id,
+        type: transport.type || transport.TransportType?.slug || 'bus',
+        sittingPlan: transport.sittingPlan || '',
+        sittingLength: transport.sittingLength || 0,
+        capacity: transport.capacity || 0,
       });
     } else {
       setEditingTransport(null);
       setFormData({
         name: '',
-        companyId: mockCompanies.filter(c => c.type === 'transport')[0]?.id || '',
+        companyId: companies[0]?.id || '',
         type: 'bus',
         sittingPlan: '2-2',
         sittingLength: 10,
@@ -269,8 +285,9 @@ export const TransportsPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AnimatePresence mode="popLayout">
           {filteredTransports.map((transport, index) => {
-            const company = mockCompanies.find(c => c.id === transport.companyId);
-            const Icon = getTransportIcon(transport.type);
+            const company = companies.find(c => c.id === transport.company_id) || transport.Company;
+            const transportTypeSlug = transport.TransportType?.slug || transport.transport_type_id || 'bus';
+            const Icon = getTransportIcon(transportTypeSlug);
             return (
               <motion.div
                 key={transport.id}
@@ -292,33 +309,32 @@ export const TransportsPage = () => {
                     </motion.div>
                     <div>
                       <h3 className="font-bold text-gray-900 dark:text-white">{transport.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{company?.name}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{company?.name || 'Unknown company'}</p>
                     </div>
                   </div>
                   <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-xs">
-                    {t(`transportTypes.${transport.type}`)}
+                    {t(`transportTypes.${transportTypeSlug}`)}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Capacity</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{transport.capacity} seats</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{transport.capacity || 0} seats</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Layout</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{transport.sittingPlan}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Rows</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{transport.sittingLength}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Registration</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{transport.registration_number || '-'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
-                    <p className="font-bold text-green-600">Active</p>
+                    <p className="font-bold text-green-600">{transport.status || 'active'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{transportTypeSlug}</p>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -398,7 +414,7 @@ export const TransportsPage = () => {
                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">Select Company</option>
-                    {mockCompanies.filter(c => c.type === 'transport').map(c => (
+                    {companies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { Op } = require('sequelize');
 const { User, Role, UserRole, UserSession } = require('../models');
 const { JWT_SECRET, JWT_REFRESH_SECRET, JWT_EXPIRY, JWT_REFRESH_EXPIRY } = process.env;
 
@@ -21,7 +22,7 @@ const verifyRefreshToken = async (token, hash) => {
 };
 
 const register = async ({ email, phone, password, first_name, last_name, preferred_language, preferred_currency_id }) => {
-  const existing = await User.findOne({ where: { [User.sequelize.Op.or]: [{ email }, { phone }] } });
+  const existing = await User.findOne({ where: { [Op.or]: [{ email }, { phone }] } });
   if (existing) {
     throw new Error('Email or phone already registered');
   }

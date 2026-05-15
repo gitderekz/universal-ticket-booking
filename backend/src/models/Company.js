@@ -29,7 +29,7 @@ module.exports = (sequelize) => {
       allowNull: true
     },
     category: {
-      type: DataTypes.ENUM('transport', 'entertainment', 'events', 'outdoor', 'housing', 'sports'),
+      type: DataTypes.ENUM('transport', 'facility', 'entertainment', 'events', 'outdoor', 'housing', 'sports'),
       allowNull: false,
       defaultValue: 'transport'
     },

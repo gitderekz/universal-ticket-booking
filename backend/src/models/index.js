@@ -1,3 +1,4 @@
+const { Sequelize, DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const UserModel = require('./User');
@@ -20,7 +21,10 @@ const BookingModel = require('./Booking');
 const BookingItemModel = require('./BookingItem');
 const SeatHoldModel = require('./SeatHold');
 const PaymentModel = require('./Payment');
-
+const FacilityTypeModel = require('./FacilityType');
+const FacilityModel = require('./Facility');
+const ActivityModel = require('./Activity');
+const ActivityInstanceModel = require('./ActivityInstance');
 const User = UserModel(sequelize);
 const Role = RoleModel(sequelize);
 const UserRole = UserRoleModel(sequelize);
@@ -33,6 +37,10 @@ const Transport = TransportModel(sequelize);
 const Station = StationModel(sequelize);
 const Route = RouteModel(sequelize);
 const RouteStation = RouteStationModel(sequelize);
+const FacilityType = FacilityTypeModel(sequelize);
+const Facility = FacilityModel(sequelize);
+const Activity = ActivityModel(sequelize);
+const ActivityInstance = ActivityInstanceModel(sequelize);
 const Timetable = TimetableModel(sequelize);
 const Journey = JourneyModel(sequelize);
 const SeatLayout = SeatLayoutModel(sequelize);
@@ -45,7 +53,8 @@ const Payment = PaymentModel(sequelize);
 User.belongsToMany(Role, {
   through: UserRole,
   foreignKey: 'user_id',
-  otherKey: 'role_id'
+  otherKey: 'role_id',
+  as: 'roles'
 });
 Role.belongsToMany(User, {
   through: UserRole,
@@ -58,7 +67,7 @@ Role.hasMany(UserRole, { foreignKey: 'role_id' });
 UserSession.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(UserSession, { foreignKey: 'user_id' });
 Company.belongsTo(User, { as: 'owner', foreignKey: 'owner_id' });
-User.hasMany(Company, { foreignKey: 'owner_id' });
+User.hasMany(Company, { foreignKey: 'owner_id', as: 'ownedCompanies' });
 User.belongsTo(Currency, { foreignKey: 'preferred_currency_id', as: 'preferredCurrency' });
 Currency.hasMany(User, { foreignKey: 'preferred_currency_id' });
 
@@ -91,20 +100,37 @@ Journey.belongsTo(Route, { foreignKey: 'route_id' });
 Route.hasMany(Journey, { foreignKey: 'route_id' });
 SeatLayout.hasMany(Seat, { foreignKey: 'seat_layout_id' });
 Seat.belongsTo(SeatLayout, { foreignKey: 'seat_layout_id' });
-Transport.hasOne(SeatLayout, { foreignKey: 'layoutable_id', scope: { layoutable_type: 'transport' }, as: 'seatLayout' });
+Transport.hasOne(SeatLayout, { foreignKey: 'layoutable_id', scope: { layoutable_type: 'transport' }, as: 'seatLayout', constraints: false });
 SeatLayout.belongsTo(Transport, { foreignKey: 'layoutable_id', constraints: false, as: 'transport' });
+Facility.hasOne(SeatLayout, { foreignKey: 'layoutable_id', scope: { layoutable_type: 'facility' }, as: 'seatLayout', constraints: false });
+SeatLayout.belongsTo(Facility, { foreignKey: 'layoutable_id', constraints: false, as: 'facility' });
 Booking.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(Booking, { foreignKey: 'user_id' });
 Booking.belongsTo(Company, { foreignKey: 'company_id' });
 Company.hasMany(Booking, { foreignKey: 'company_id' });
 Booking.belongsTo(Journey, { foreignKey: 'journey_id' });
 Journey.hasMany(Booking, { foreignKey: 'journey_id' });
+Booking.belongsTo(ActivityInstance, { foreignKey: 'activity_instance_id' });
+ActivityInstance.hasMany(Booking, { foreignKey: 'activity_instance_id' });
 Booking.belongsTo(Currency, { foreignKey: 'currency_id' });
 Currency.hasMany(Booking, { foreignKey: 'currency_id' });
 Booking.hasMany(BookingItem, { foreignKey: 'booking_id' });
 BookingItem.belongsTo(Booking, { foreignKey: 'booking_id' });
 Booking.hasMany(Payment, { foreignKey: 'booking_id' });
 Payment.belongsTo(Booking, { foreignKey: 'booking_id' });
+
+Company.hasMany(Facility, { foreignKey: 'company_id' });
+Facility.belongsTo(Company, { foreignKey: 'company_id' });
+FacilityType.hasMany(Facility, { foreignKey: 'facility_type_id' });
+Facility.belongsTo(FacilityType, { foreignKey: 'facility_type_id' });
+
+Facility.hasMany(Activity, { foreignKey: 'facility_id' });
+Activity.belongsTo(Facility, { foreignKey: 'facility_id' });
+Activity.hasMany(ActivityInstance, { foreignKey: 'activity_id' });
+ActivityInstance.belongsTo(Activity, { foreignKey: 'activity_id' });
+Facility.hasMany(ActivityInstance, { foreignKey: 'facility_id' });
+ActivityInstance.belongsTo(Facility, { foreignKey: 'facility_id' });
+
 SeatHold.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(SeatHold, { foreignKey: 'user_id' });
 Journey.hasMany(SeatHold, { foreignKey: 'journey_id' });
@@ -133,5 +159,9 @@ module.exports = {
   Booking,
   BookingItem,
   SeatHold,
-  Payment
+  Payment,
+  FacilityType,
+  Facility,
+  Activity,
+  ActivityInstance
 };

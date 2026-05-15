@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
 
 export type UserRole = 'developer' | 'super_admin' | 'company_admin' | 'staff' | 'customer';
 
@@ -6,6 +7,8 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  first_name: string;
+  last_name: string;
   phone: string;
   role: UserRole;
   companyId?: string;
@@ -28,6 +31,8 @@ interface RegisterData {
   role?: UserRole;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -49,40 +54,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+        email,
+        password
+      });
 
-    const mockUser: User = {
-      id: '1',
-      email,
-      fullName: 'John Doe',
-      phone: '+255 712 345 678',
-      role: email.includes('admin') ? 'super_admin' : 'customer',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + email,
-    };
+      const { user: backendUser, accessToken, refreshToken } = response.data;
+      
+      // Store tokens
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
 
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
+      // Decode JWT to get roles (since the login response doesn't include the full Roles array)
+      const decodeJWT = (token: string) => {
+        try {
+          const parts = token.split('.');
+          const payload = JSON.parse(atob(parts[1]));
+          return payload;
+        } catch {
+          return {};
+        }
+      };
+
+      const tokenPayload = decodeJWT(accessToken);
+      const rolesSlugs = tokenPayload.roles || [];
+      
+      const roleMap: { [key: string]: UserRole } = {
+        'developer': 'developer',
+        'super_admin': 'super_admin',
+        'company_admin': 'company_admin',
+        'staff': 'staff',
+        'customer': 'customer'
+      };
+      
+      let userRole: UserRole = 'customer';
+      for (const roleSlug of rolesSlugs) {
+        if (roleMap[roleSlug]) {
+          userRole = roleMap[roleSlug];
+          break;
+        }
+      }
+
+      const authUser: User = {
+        id: backendUser.id,
+        email: backendUser.email,
+        fullName: `${backendUser.first_name} ${backendUser.last_name}`,
+        first_name: backendUser.first_name,
+        last_name: backendUser.last_name,
+        phone: backendUser.phone,
+        role: userRole,
+        companyId: backendUser.company_id,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${backendUser.email}`
+      };
+
+      setUser(authUser);
+      localStorage.setItem('user', JSON.stringify(authUser));
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Login failed';
+      throw new Error(message);
+    }
   };
 
   const register = async (data: RegisterData) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+        email: data.email,
+        password: data.password,
+        first_name: data.fullName.split(' ')[0],
+        last_name: data.fullName.split(' ').slice(1).join(' '),
+        phone: data.phone,
+        preferred_language: 'en'
+      });
 
-    const mockUser: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      email: data.email,
-      fullName: data.fullName,
-      phone: data.phone,
-      role: data.role || 'customer',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + data.email,
-    };
+      const { user: backendUser } = response.data;
+      
+      const authUser: User = {
+        id: backendUser.id,
+        email: backendUser.email,
+        fullName: `${backendUser.first_name} ${backendUser.last_name}`,
+        first_name: backendUser.first_name,
+        last_name: backendUser.last_name,
+        phone: backendUser.phone,
+        role: 'customer',
+        companyId: backendUser.company_id,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${backendUser.email}`
+      };
 
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
+      setUser(authUser);
+      localStorage.setItem('user', JSON.stringify(authUser));
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Registration failed';
+      throw new Error(message);
+    }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
   };
 
   return (
@@ -97,3 +168,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
+

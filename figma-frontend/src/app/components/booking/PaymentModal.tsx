@@ -6,14 +6,16 @@ import { X, CreditCard, Smartphone, Building2, CheckCircle, Loader2 } from 'luci
 interface PaymentModalProps {
   amount: number;
   onClose: () => void;
-  onSuccess: () => void;
+  onSubmit: (paymentPayload: { method: 'mobile' | 'card' | 'bank'; provider: string; phoneNumber?: string; }) => Promise<void>;
+  onSuccess?: () => void;
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({ amount, onClose, onSuccess }) => {
+export const PaymentModal: React.FC<PaymentModalProps> = ({ amount, onClose, onSubmit, onSuccess }) => {
   const { t } = useTranslation();
   const { formatPrice } = useCurrency();
   const [paymentMethod, setPaymentMethod] = useState<'mobile' | 'card' | 'bank'>('mobile');
   const [provider, setProvider] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -31,12 +33,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ amount, onClose, onS
 
   const handlePayment = async () => {
     setProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setProcessing(false);
-    setSuccess(true);
-    setTimeout(() => {
-      onSuccess();
-    }, 2000);
+    try {
+      await onSubmit({ method: paymentMethod, provider, phoneNumber });
+      setSuccess(true);
+      if (onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 1200);
+      }
+    } catch (error) {
+      console.error('Payment submission failed:', error);
+      alert('Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   if (success) {
@@ -156,6 +166,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ amount, onClose, onS
               {provider && (
                 <input
                   type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="Enter phone number"
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                 />
@@ -204,7 +216,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ amount, onClose, onS
 
           <button
             onClick={handlePayment}
-            disabled={processing || !provider}
+            disabled={processing || !provider || (paymentMethod === 'mobile' && !phoneNumber)}
             className="w-full bg-blue-500 text-white py-4 rounded-lg font-bold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {processing && <Loader2 className="w-5 h-5 animate-spin" />}

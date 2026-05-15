@@ -43,7 +43,11 @@ module.exports = (sequelize) => {
     },
     activity_instance_id: {
       type: DataTypes.UUID,
-      allowNull: true
+      allowNull: true,
+      references: {
+        model: 'activity_instances',
+        key: 'id'
+      }
     },
     status: {
       type: DataTypes.ENUM('pending', 'holding', 'confirmed', 'cancelled', 'refunded', 'completed', 'expired'),
@@ -109,6 +113,7 @@ module.exports = (sequelize) => {
       { fields: ['company_id'] },
       { fields: ['status'] },
       { fields: ['journey_id'] },
+      { fields: ['activity_instance_id'] },
       { fields: ['currency_id'] }
     ]
   });

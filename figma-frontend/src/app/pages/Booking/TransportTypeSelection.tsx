@@ -1,63 +1,96 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Bus, Ship, Plane, Train, Car } from 'lucide-react';
+import apiClient from '../../../services/apiClient';
+
+const transportTypeMeta: Record<string, { icon: JSX.Element; color: string; description: string }> = {
+  bus: {
+    icon: <Bus className="w-12 h-12" />,
+    color: 'from-blue-500 to-blue-600',
+    description: 'Long distance buses and mini buses'
+  },
+  mini_bus: {
+    icon: <Bus className="w-12 h-12" />,
+    color: 'from-blue-500 to-blue-600',
+    description: 'Shuttle and minibus services'
+  },
+  safari_car: {
+    icon: <Car className="w-12 h-12" />,
+    color: 'from-green-500 to-green-600',
+    description: 'Safari tours and 4x4 vehicles'
+  },
+  train: {
+    icon: <Train className="w-12 h-12" />,
+    color: 'from-purple-500 to-purple-600',
+    description: 'Railway services across the country'
+  },
+  boat: {
+    icon: <Ship className="w-12 h-12" />,
+    color: 'from-cyan-500 to-cyan-600',
+    description: 'Boat services'
+  },
+  ferry: {
+    icon: <Ship className="w-12 h-12" />,
+    color: 'from-cyan-500 to-cyan-600',
+    description: 'Ferries and marine routes'
+  },
+  ship: {
+    icon: <Ship className="w-12 h-12" />,
+    color: 'from-cyan-500 to-cyan-600',
+    description: 'Large passenger ships'
+  },
+  airplane: {
+    icon: <Plane className="w-12 h-12" />,
+    color: 'from-red-500 to-red-600',
+    description: 'Domestic and regional flights'
+  }
+};
 
 export const TransportTypeSelection: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [transportTypes, setTransportTypes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const transportTypes = [
-    {
-      id: 'bus',
-      types: ['bus', 'mini_bus'],
-      icon: <Bus className="w-12 h-12" />,
-      title: t('transportTypes.bus'),
-      description: 'Long distance buses and mini buses',
-      color: 'from-blue-500 to-blue-600',
-      count: 25,
-    },
-    {
-      id: 'safari_car',
-      types: ['safari_car'],
-      icon: <Car className="w-12 h-12" />,
-      title: t('transportTypes.safari_car'),
-      description: 'Safari tours and 4x4 vehicles',
-      color: 'from-green-500 to-green-600',
-      count: 12,
-    },
-    {
-      id: 'train',
-      types: ['train'],
-      icon: <Train className="w-12 h-12" />,
-      title: t('transportTypes.train'),
-      description: 'Railway services across the country',
-      color: 'from-purple-500 to-purple-600',
-      count: 8,
-    },
-    {
-      id: 'water',
-      types: ['boat', 'ferry', 'ship'],
-      icon: <Ship className="w-12 h-12" />,
-      title: 'Water Transport',
-      description: 'Boats, ferries, and ships',
-      color: 'from-cyan-500 to-cyan-600',
-      count: 15,
-    },
-    {
-      id: 'airplane',
-      types: ['airplane'],
-      icon: <Plane className="w-12 h-12" />,
-      title: t('transportTypes.airplane'),
-      description: 'Domestic and regional flights',
-      color: 'from-red-500 to-red-600',
-      count: 10,
-    },
-  ];
+  useEffect(() => {
+    const loadTransportTypes = async () => {
+      try {
+        const response = await apiClient.get('/transports/types');
+        setTransportTypes(response.data.transport_types || []);
+      } catch (error) {
+        console.error('Failed to load transport types', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleSelect = (transportType: string, types: string[]) => {
-    navigate(`/bookings/transport/${transportType}`, { state: { types } });
+    loadTransportTypes();
+  }, []);
+
+  const handleSelect = (transportType: string) => {
+    navigate(`/bookings/transport/${transportType}`);
   };
+
+  const cards = transportTypes.length > 0
+    ? transportTypes.map((type) => ({
+      id: type.slug,
+      icon: transportTypeMeta[type.slug]?.icon || <Bus className="w-12 h-12" />,
+      title: type.name,
+      description: type.description || transportTypeMeta[type.slug]?.description || '',
+      color: transportTypeMeta[type.slug]?.color || 'from-blue-500 to-blue-600',
+      count: type.transport_count || 0
+    }))
+    : [
+      {
+        id: 'bus',
+        icon: <Bus className="w-12 h-12" />,
+        title: t('transportTypes.bus'),
+        description: 'Long distance buses and mini buses',
+        color: 'from-blue-500 to-blue-600',
+        count: 0
+      }
+    ];
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -71,10 +104,10 @@ export const TransportTypeSelection: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {transportTypes.map((type) => (
+        {cards.map((type) => (
           <button
             key={type.id}
-            onClick={() => handleSelect(type.id, type.types)}
+            onClick={() => handleSelect(type.id)}
             className="group bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all text-left"
           >
             <div className={`bg-gradient-to-r ${type.color} w-20 h-20 rounded-2xl flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform`}>

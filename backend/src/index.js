@@ -7,6 +7,7 @@ const { sequelize, testConnection } = require('./config/database');
 const i18n = require('./config/i18n');
 const errorHandler = require('./middleware/errorHandler');
 const rateLimiter = require('./middleware/rateLimiter');
+const models = require('./models');
 const { seedDatabase } = require('./services/seedService');
 
 // Import routes
@@ -19,6 +20,9 @@ const journeyRoutes = require('./routes/journey');
 const bookingRoutes = require('./routes/booking');
 const seatHoldRoutes = require('./routes/seat-hold');
 const paymentRoutes = require('./routes/payment');
+const facilityRoutes = require('./routes/facility');
+const activityRoutes = require('./routes/activity');
+const activityInstanceRoutes = require('./routes/activity-instance');
 const adminRoutes = require('./routes/admin');
 const reportRoutes = require('./routes/report');
 
@@ -31,11 +35,27 @@ const cronJobs = require('./jobs');
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = Array.from(new Set([
+  ...(process.env.SOCKET_CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175'
+]));
+
 // Socket.IO setup
 const io = socketIo(server, {
   cors: {
-    origin: process.env.SOCKET_CORS_ORIGIN || "http://localhost:3000",
-    methods: ["GET", "POST"],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, origin || true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST'],
     credentials: true
   }
 });
@@ -43,7 +63,13 @@ const io = socketIo(server, {
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.SOCKET_CORS_ORIGIN || "http://localhost:3000",
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, origin || true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -68,6 +94,9 @@ app.use('/api/journeys', journeyRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/seat-holds', seatHoldRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/facilities', facilityRoutes);
+app.use('/api/activities', activityRoutes);
+app.use('/api/activity-instances', activityInstanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
 
@@ -92,7 +121,9 @@ const startServer = async () => {
 
     // Sync database (in development only)
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
+      // Using force: true temporarily to rebuild tables with corrected schema
+      const forceRebuild = process.env.FORCE_DB_REBUILD === 'true';
+      await sequelize.sync({ force: forceRebuild, alter: !forceRebuild });
       console.log('Database synchronized successfully.');
     }
 

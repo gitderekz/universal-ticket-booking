@@ -36,7 +36,6 @@ module.exports = (sequelize) => {
   }, {
     tableName: 'currencies',
     indexes: [
-      { fields: ['code'] },
       { fields: ['active'] }
     ]
   });

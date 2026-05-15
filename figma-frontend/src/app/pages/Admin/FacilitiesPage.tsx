@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { mockFacilities as initialFacilities, mockCompanies, Facility } from '../../../data/mockData';
+import { getFacilities, getCompanies, Company } from '../../../services/adminService';
 import { Plus, Warehouse, Edit, Trash2, Search, AlertTriangle, X, Film, Trophy, Calendar, TreePine, Home } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -34,12 +34,13 @@ export const FacilitiesPage = () => {
   const { addLog } = useSystemLogs();
   const { user } = useAuth();
 
-  const [facilities, setFacilities] = useState<Facility[]>(initialFacilities);
+  const [facilities, setFacilities] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
-  const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<Facility | null>(null);
+  const [editingFacility, setEditingFacility] = useState<any | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<any | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -67,23 +68,23 @@ export const FacilitiesPage = () => {
     events: facilities.filter(f => f.category === 'events').length,
   };
 
-  const handleOpenModal = (facility?: Facility) => {
+  const handleOpenModal = (facility?: any) => {
     if (facility) {
       setEditingFacility(facility);
       setFormData({
         name: facility.name,
-        companyId: facility.companyId,
-        category: facility.category,
-        type: facility.type,
-        sittingPlan: facility.sittingPlan,
-        sittingLength: facility.sittingLength,
-        capacity: facility.capacity,
+        companyId: facility.company_id || '',
+        category: facility.category || 'entertainment',
+        type: facility.type || 'movie_theatre',
+        sittingPlan: facility.sittingPlan || '',
+        sittingLength: facility.sittingLength || 0,
+        capacity: facility.capacity || 0,
       });
     } else {
       setEditingFacility(null);
       setFormData({
         name: '',
-        companyId: mockCompanies.filter(c => c.type === 'facility')[0]?.id || '',
+        companyId: companies[0]?.id || '',
         category: 'entertainment',
         type: 'movie_theatre',
         sittingPlan: '3-3',
@@ -99,6 +100,20 @@ export const FacilitiesPage = () => {
     const seats = plan.split('-').reduce((sum, val) => sum + parseInt(val || '0'), 0);
     return seats * length;
   };
+
+  useEffect(() => {
+    const loadFacilities = async () => {
+      try {
+        const facilityData = await getFacilities(1, 100, '');
+        setFacilities(facilityData.facilities || []);
+        const companyData = await getCompanies(1, 100, '');
+        setCompanies(companyData.companies || []);
+      } catch (error) {
+        console.error('Failed to load facilities or companies', error);
+      }
+    };
+    loadFacilities();
+  }, []);
 
   const handleSave = () => {
     const newErrors: Record<string, string> = {};
@@ -293,8 +308,8 @@ export const FacilitiesPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AnimatePresence mode="popLayout">
           {filteredFacilities.map((facility, index) => {
-            const company = mockCompanies.find(c => c.id === facility.companyId);
-            const Icon = getCategoryIcon(facility.category);
+            const company = companies.find(c => c.id === facility.company_id) || facility.Company;
+            const Icon = getCategoryIcon(facility.category || 'entertainment');
             return (
               <motion.div
                 key={facility.id}
@@ -327,11 +342,11 @@ export const FacilitiesPage = () => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{facility.type.replace('_', ' ')}</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.type ? facility.type.replace('_', ' ') : 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Capacity</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{facility.capacity} seats</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.capacity ?? 'N/A'} seats</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Layout</p>
@@ -422,7 +437,7 @@ export const FacilitiesPage = () => {
                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">Select Company</option>
-                    {mockCompanies.filter(c => c.type === 'facility').map(c => (
+                    {companies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
