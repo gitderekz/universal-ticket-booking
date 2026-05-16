@@ -16,6 +16,8 @@ import {
   CheckCircle,
   ArrowRight,
 } from 'lucide-react';
+import { apiClient } from '../../../services/apiClient';
+import { useEffect, useState } from 'react';
 
 export const CustomerDashboard = () => {
   const { t } = useTranslation();
@@ -74,68 +76,84 @@ export const CustomerDashboard = () => {
     },
   ];
 
+  const [bookings, setBookings] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await apiClient.get('/bookings', { params: { user_id: user?.id } });
+        const data = res.data?.bookings || res.data || [];
+        setBookings(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load bookings for dashboard:', err);
+        setBookings([]);
+      }
+    };
+    load();
+  }, [user?.id]);
+
+  const totalBookings = bookings.length;
+  const activeBookings = bookings.filter(b => ['pending', 'holding', 'confirmed'].includes(String(b.status || '').toLowerCase())).length;
+  const completedBookings = bookings.filter(b => ['confirmed', 'completed'].includes(String(b.status || '').toLowerCase())).length;
+  const totalSpent = bookings.filter(b => String(b.payment_status || b.paymentStatus || '').toLowerCase() === 'paid')
+    .reduce((s, b) => s + Number(b.total_price || b.amount || b.price || 0), 0);
+
   const stats = [
-    {
-      icon: <Ticket className="w-6 h-6" />,
-      label: t('dashboard.totalBookings'),
-      value: '12',
-      color: 'bg-blue-500',
-    },
-    {
-      icon: <Clock className="w-6 h-6" />,
-      label: t('dashboard.activeBookings'),
-      value: '3',
-      color: 'bg-orange-500',
-    },
-    {
-      icon: <CheckCircle className="w-6 h-6" />,
-      label: t('dashboard.completedBookings'),
-      value: '9',
-      color: 'bg-green-500',
-    },
-    {
-      icon: <TrendingUp className="w-6 h-6" />,
-      label: 'Total Spent',
-      value: formatPrice(485000),
-      color: 'bg-purple-500',
-    },
+    { icon: <Ticket className="w-6 h-6" />, label: t('dashboard.totalBookings'), value: String(totalBookings), color: 'bg-blue-500' },
+    { icon: <Clock className="w-6 h-6" />, label: t('dashboard.activeBookings'), value: String(activeBookings), color: 'bg-orange-500' },
+    { icon: <CheckCircle className="w-6 h-6" />, label: t('dashboard.completedBookings'), value: String(completedBookings), color: 'bg-green-500' },
+    { icon: <TrendingUp className="w-6 h-6" />, label: 'Total Spent', value: formatPrice(totalSpent), color: 'bg-purple-500' },
   ];
 
-  const recentBookings = [
-    {
-      id: '1',
-      type: 'transport',
-      title: 'Dar es Salaam → Mwanza',
-      company: 'Kilimanjaro Express',
-      date: '2026-05-10',
-      time: '10:00',
-      seats: 2,
-      status: 'confirmed',
-      price: 120000,
-    },
-    {
-      id: '2',
-      type: 'entertainment',
-      title: 'Avengers: Endgame',
-      company: 'Dar Es Salaam Cinemas',
-      date: '2026-05-08',
-      time: '18:00',
-      seats: 3,
-      status: 'confirmed',
-      price: 36000,
-    },
-    {
-      id: '3',
-      type: 'sports',
-      title: 'Simba vs Yanga',
-      company: 'National Stadium',
-      date: '2026-05-12',
-      time: '16:00',
-      seats: 4,
-      status: 'pending',
-      price: 60000,
-    },
-  ];
+  const recentBookings = bookings.slice(0, 6).map((b: any) => {
+    let title = '';
+    let date = '';
+    let time = '';
+    let seatsCount = 0;
+
+    if (b.Journey) {
+      // Transport booking
+      const route = b.Journey.Route;
+      const startStation = route?.originStation?.name || route?.startLocation || 'Unknown';
+      const endStation = route?.destinationStation?.name || route?.endLocation || 'Unknown';
+      title = `${startStation} → ${endStation}`;
+      date = b.Journey.journey_date ? new Date(b.Journey.journey_date).toLocaleDateString() : '';
+      if (b.Journey.departure_at) {
+        const depTime = new Date(b.Journey.departure_at);
+        time = depTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      }
+    } else if (b.ActivityInstance) {
+      // Facility booking
+      const activity = b.ActivityInstance.Activity;
+      const facility = b.ActivityInstance.Facility;
+      title = activity?.name || facility?.name || 'Unknown Event';
+      date = b.ActivityInstance.start_at ? new Date(b.ActivityInstance.start_at).toLocaleDateString() : '';
+      if (b.ActivityInstance.start_at) {
+        const startTime = new Date(b.ActivityInstance.start_at);
+        time = startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      }
+    }
+
+    if (Array.isArray(b.SeatHolds)) {
+      seatsCount = b.SeatHolds.length;
+    } else if (b.passenger_count) {
+      seatsCount = b.passenger_count;
+    } else if (Array.isArray(b.BookingItems)) {
+      seatsCount = b.BookingItems.length;
+    }
+
+    return {
+      id: b.id || b.booking_code || 'unknown',
+      type: b.booking_type === 'transport' ? 'transport' : 'facility',
+      title: title,
+      company: b.contact_name || b.customer_name || '',
+      date: date,
+      time: time,
+      seats: seatsCount,
+      status: b.status || 'pending',
+      price: Number(b.total_amount || b.amount || 0),
+    };
+  });
 
   return (
     <div className="space-y-6">

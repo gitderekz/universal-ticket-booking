@@ -79,16 +79,55 @@ export const BookingsOverview: React.FC = () => {
             ? rawPaymentStatus
             : 'pending';
 
+          // Extract nested data from Journey (for transport) or ActivityInstance (for facility)
+          let routeDisplay = '';
+          let dateDisplay = '';
+          let timeDisplay = '';
+          let seatsCount = 0;
+
+          if (b.Journey) {
+            // Transport booking
+            const route = b.Journey.Route;
+            const startStation = route?.originStation?.name || route?.startLocation || 'Unknown';
+            const endStation = route?.destinationStation?.name || route?.endLocation || 'Unknown';
+            routeDisplay = `${startStation} → ${endStation}`;
+            dateDisplay = b.Journey.journey_date ? new Date(b.Journey.journey_date).toLocaleDateString() : '';
+            if (b.Journey.departure_at) {
+              const depTime = new Date(b.Journey.departure_at);
+              timeDisplay = depTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+          } else if (b.ActivityInstance) {
+            // Facility booking
+            const activity = b.ActivityInstance.Activity;
+            const facility = b.ActivityInstance.Facility;
+            routeDisplay = activity?.name || facility?.name || 'Unknown';
+            dateDisplay = b.ActivityInstance.start_at ? new Date(b.ActivityInstance.start_at).toLocaleDateString() : '';
+            timeDisplay = b.ActivityInstance.start_at ? new Date(b.ActivityInstance.start_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+          }
+
+          // Extract seats from SeatHold array or BookingItem array
+          if (Array.isArray(b.SeatHolds)) {
+            seatsCount = b.SeatHolds.length;
+          } else if (b.passenger_count) {
+            seatsCount = b.passenger_count;
+          } else if (Array.isArray(b.BookingItems)) {
+            seatsCount = b.BookingItems.length;
+          } else {
+            seatsCount = 0;
+          }
+
+          const amountNumber = Number(b.total_amount || b.amount || 0);
+
           return {
-            id: b.id || b.booking_number || 'UNKNOWN',
-            customerName: b.customer_name || b.customerName || 'Unknown',
-            customerPhone: b.customer_phone || b.customerPhone || '',
-            type: b.type === 'transport' ? 'Transport' : 'Facility' as 'Transport' | 'Facility',
-            route: b.route || b.title || '',
-            date: b.date || new Date().toISOString().split('T')[0],
-            time: b.time || '00:00',
-            seats: b.seats || 0,
-            amount: b.amount || b.total_price || 0,
+            id: b.id || b.booking_code || 'UNKNOWN',
+            customerName: b.contact_name || b.customer_name || b.customerName || 'Unknown',
+            customerPhone: b.contact_phone || b.customer_phone || b.customerPhone || '',
+            type: b.booking_type === 'transport' ? 'Transport' : 'Facility' as 'Transport' | 'Facility',
+            route: routeDisplay,
+            date: dateDisplay,
+            time: timeDisplay,
+            seats: seatsCount,
+            amount: amountNumber,
             status: normalizedStatus as BookingRecord['status'],
             paymentStatus: normalizedPaymentStatus as 'paid' | 'pending' | 'failed',
           };
@@ -133,7 +172,7 @@ export const BookingsOverview: React.FC = () => {
     { icon: <Ticket className="w-6 h-6" />, label: 'Total Bookings', value: String(bookings.length), grad: 'from-blue-500 to-cyan-600', trend: `+${bookings.filter(b => b.status === 'confirmed').length} confirmed` },
     { icon: <Users className="w-6 h-6" />, label: 'Total Passengers', value: String(bookings.reduce((s, b) => s + b.seats, 0)), grad: 'from-green-500 to-emerald-600', trend: `${bookings.reduce((s, b) => s + b.seats, 0)} seats` },
     { icon: <DollarSign className="w-6 h-6" />, label: 'Total Revenue', value: formatPrice(totalRevenue), grad: 'from-purple-500 to-pink-600', trend: `${bookings.filter(b => b.paymentStatus === 'paid').length} paid` },
-    { icon: <CheckCircle className="w-6 h-6" />, label: 'Confirmation Rate', value: `${Math.round(bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length / bookings.length * 100)}%`, grad: 'from-orange-500 to-amber-600', trend: 'of all bookings' },
+    { icon: <CheckCircle className="w-6 h-6" />, label: 'Confirmation Rate', value: bookings.length === 0 ? '0%' : `${Math.round(bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length / bookings.length * 100)}%`, grad: 'from-orange-500 to-amber-600', trend: 'of all bookings' },
   ];
 
   return (

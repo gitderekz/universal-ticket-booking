@@ -23,9 +23,15 @@ interface NavItem {
   roles: string[];
 }
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ onClose?: () => void; isMobile?: boolean }> = ({ onClose, isMobile }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
+
+  const handleNavClick = () => {
+    if (isMobile && onClose) {
+      onClose();
+    }
+  };
 
   const navItems: NavItem[] = [
     {
@@ -107,13 +113,13 @@ export const Sidebar: React.FC = () => {
   );
 
   return (
-    <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-      <div className="p-6">
+    <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen overflow-y-auto lg:w-64 sm:w-56">
+      <div className="p-4 lg:p-6">
         <div className="flex items-center gap-2 mb-8">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
             <Ticket className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900 dark:text-white">BookNow</span>
+          <span className="text-xl font-bold text-gray-900 dark:text-white hidden md:inline">BookNow</span>
         </div>
 
         <nav className="space-y-2">
@@ -121,6 +127,7 @@ export const Sidebar: React.FC = () => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={handleNavClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
@@ -130,7 +137,7 @@ export const Sidebar: React.FC = () => {
               }
             >
               {item.icon}
-              <span className="font-medium">{item.label}</span>
+              <span className="font-medium hidden sm:inline">{item.label}</span>
             </NavLink>
           ))}
         </nav>

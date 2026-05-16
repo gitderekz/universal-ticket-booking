@@ -77,6 +77,27 @@ export const TransportBooking: React.FC = () => {
     loadData();
   }, [transportType]);
 
+  const getTitle = () => {
+    try {
+      if (currentStep === 'transport') {
+        return selectedTransport ? (transport?.name || `Choose ${transportTypeLabel}`) : t('booking.selectTransport');
+      }
+      if (currentStep === 'route') {
+        return selectedRoute ? `${route?.startLocation || startStation} → ${route?.endLocation || endStation}` : `Choose route for ${transport?.name || transportTypeLabel}`;
+      }
+      if (currentStep === 'datetime') {
+        return selectedTimetable ? `When: ${new Date(timetable?.journey_date || timetable?.date || '').toLocaleDateString()}` : t('booking.selectDateTime') || 'Choose Date & Time';
+      }
+      if (currentStep === 'seats') {
+        return `Select seats${startStation && endStation ? `: ${startStation} → ${endStation}` : ''}`;
+      }
+      if (currentStep === 'details') return 'Passenger Details';
+    } catch (e) {
+      return t('booking.selectTransport');
+    }
+    return t('booking.selectTransport');
+  };
+
   useEffect(() => {
     const loadTimetables = async () => {
       if (selectedRoute && selectedTransport) {
@@ -148,7 +169,7 @@ export const TransportBooking: React.FC = () => {
     <div className="max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          {t('booking.selectTransport')}
+          {getTitle()}
         </h1>
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <span className={currentStep === 'transport' ? 'text-blue-500 font-medium' : ''}>1. Transport</span>

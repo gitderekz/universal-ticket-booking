@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCurrency, CURRENCIES } from '../../../contexts/CurrencyContext';
 import { useTheme } from 'next-themes';
-import { Bell, Moon, Sun, Globe, DollarSign, User, LogOut, ChevronDown } from 'lucide-react';
+import { Bell, Moon, Sun, Globe, DollarSign, User, LogOut, ChevronDown, Menu, X } from 'lucide-react';
 import { NotificationPanel } from './NotificationPanel';
 
-export const Header: React.FC = () => {
+export const Header: React.FC<{ onMenuToggle?: () => void; isMobile?: boolean }> = ({ onMenuToggle, isMobile = false }) => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
   const { currency, setCurrency } = useCurrency();
@@ -54,17 +54,30 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4">
       <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {t('app.name')}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t('app.tagline')}</p>
+        {/* Left section - Logo/Menu and Title */}
+        <div className="flex items-center gap-4 flex-1">
+          {isMobile && (
+            <button
+              id="hamburger-btn"
+              onClick={onMenuToggle}
+              className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg lg:hidden"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          )}
+          <div className="hidden sm:block">
+            <h1 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white">
+              {t('app.name')}
+            </h1>
+            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">{t('app.tagline')}</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div ref={notifRef}>
+        {/* Right section - Controls */}
+        <div className="flex items-center gap-2 md:gap-4">
+          <div ref={notifRef} className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
@@ -81,7 +94,7 @@ export const Header: React.FC = () => {
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          <div className="relative" ref={langRef}>
+          <div className="relative hidden md:block" ref={langRef}>
             <button
               onClick={() => setShowLangMenu(!showLangMenu)}
               className="flex items-center gap-2 p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
@@ -99,7 +112,7 @@ export const Header: React.FC = () => {
                       i18n.changeLanguage(lang.code);
                       setShowLangMenu(false);
                     }}
-                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
                       i18n.language === lang.code ? 'bg-blue-50 dark:bg-blue-900' : ''
                     }`}
                   >
@@ -110,7 +123,7 @@ export const Header: React.FC = () => {
             )}
           </div>
 
-          <div className="relative" ref={currRef}>
+          <div className="relative hidden md:block" ref={currRef}>
             <button
               onClick={() => setShowCurrMenu(!showCurrMenu)}
               className="flex items-center gap-2 p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
@@ -128,7 +141,7 @@ export const Header: React.FC = () => {
                       setCurrency(curr);
                       setShowCurrMenu(false);
                     }}
-                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm ${
                       currency.code === curr.code ? 'bg-blue-50 dark:bg-blue-900 text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white'
                     }`}
                   >
@@ -143,25 +156,25 @@ export const Header: React.FC = () => {
           <div className="relative" ref={userRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              className="flex items-center gap-2 md:gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
             >
               {user?.avatar ? (
                 <img src={user.avatar} alt={user.fullName} className="w-8 h-8 rounded-full" />
               ) : (
                 <User className="w-8 h-8 p-1 bg-gray-200 dark:bg-gray-700 rounded-full" />
               )}
-              <div className="text-left hidden md:block">
+              <div className="text-left hidden lg:block">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.fullName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{t(`roles.${user?.role}`)}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{t(`roles.${user?.role}`)}</p>
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-300 hidden md:block" />
             </button>
             {showUserMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
                 <Link
                   to="/profile"
                   onClick={() => setShowUserMenu(false)}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-900 dark:text-white"
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-900 dark:text-white text-sm"
                 >
                   <User className="w-4 h-4" />
                   {t('nav.profile')}
@@ -171,7 +184,7 @@ export const Header: React.FC = () => {
                     logout();
                     setShowUserMenu(false);
                   }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-600"
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-red-600 text-sm"
                 >
                   <LogOut className="w-4 h-4" />
                   {t('auth.logout')}

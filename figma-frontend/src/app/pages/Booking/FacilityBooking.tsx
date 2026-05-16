@@ -112,6 +112,19 @@ export const FacilityBooking: React.FC = () => {
     }
   }, [selectedTimetable]);
 
+  const getTitle = () => {
+    try {
+      if (currentStep === 'facility') return selectedFacility ? (facility?.name || t('booking.selectFacility')) : t('booking.selectFacility');
+      if (currentStep === 'activity') return selectedActivity ? (activity?.name || 'Choose Activity') : `Choose activity for ${facility?.name || ''}`;
+      if (currentStep === 'datetime') return selectedTimetable ? `When: ${new Date(timetable?.start_at || timetable?.date || '').toLocaleDateString()}` : t('booking.selectDateTime') || 'Choose Date & Time';
+      if (currentStep === 'seats') return `Select seats${activity ? ` for ${activity.name}` : ''}`;
+      if (currentStep === 'details') return 'Personal Details';
+    } catch (e) {
+      return t('booking.selectFacility');
+    }
+    return t('booking.selectFacility');
+  };
+
   const reserveSelectedSeats = async () => {
     if (!selectedTimetable || selectedSeats.length === 0) return;
     try {
@@ -162,7 +175,7 @@ export const FacilityBooking: React.FC = () => {
     <div className="max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          {t('booking.selectFacility')}
+          {getTitle()}
         </h1>
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <span className={currentStep === 'facility' ? 'text-blue-500 font-medium' : ''}>1. Facility</span>
