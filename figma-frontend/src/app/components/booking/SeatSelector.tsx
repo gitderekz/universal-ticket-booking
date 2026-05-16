@@ -292,7 +292,6 @@
 // };
 
 //figma-frontend/src/app/components/booking/SeatSelector.tsx
-
 import React, { useState, useEffect } from 'react';
 import {
   Armchair,
