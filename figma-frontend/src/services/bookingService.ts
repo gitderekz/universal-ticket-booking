@@ -58,7 +58,8 @@ export const bookingService = {
   },
 
   createBooking: async (bookingData: {
-    journey_id: string;
+    journey_id?: string;
+    activity_instance_id?: string;
     seat_codes: string[];
     booking_type?: string;
     items: BookingItem[];

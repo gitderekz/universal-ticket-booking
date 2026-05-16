@@ -362,11 +362,19 @@ Payment: M-Pesa
   
   // STEP 14: Select Mobile Money (if needed)
   const mobileMoneyBtn = await page.$('button:has-text("Mobile Money")');
-  if (mobileMoneyBtn) await mobileMoneyBtn.click();
-  await sleep(400);
+  if (mobileMoneyBtn) {
+    await mobileMoneyBtn.click();
+    await sleep(400);
+  }
   
-  // STEP 15: Select Airtel Money provider
-  await page.click('button:has-text("Airtel Money")');
+  // STEP 15: Select payment provider (prefer M-Pesa, fallback to Airtel Money)
+  const mpesaButton = await page.$('button:has-text("M-Pesa")');
+  const airtelButtons = await page.$$('button:has-text("Airtel Money")');
+  if (mpesaButton) {
+    await mpesaButton.click();
+  } else if (airtelButtons.length > 0) {
+    await airtelButtons[airtelButtons.length - 1].click();
+  }
   await sleep(300);
   
   // STEP 16: Fill phone

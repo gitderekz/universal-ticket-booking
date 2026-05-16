@@ -61,6 +61,7 @@ module.exports = (sequelize) => {
     tableName: 'seat_holds',
     indexes: [
       { fields: ['journey_id'] },
+      { fields: ['activity_instance_id'] },
       { fields: ['seat_code'] },
       { fields: ['user_id'] },
       { fields: ['status'] },

@@ -68,16 +68,23 @@ const processPayment = async (req, res, next) => {
       await booking.save();
 
       // Convert seat holds to confirmed bookings
-      if (booking.journey_id) {
-        await seatHoldService.convertHoldsToBooking(booking_id);
+      if (booking.journey_id || booking.activity_instance_id) {
+        await seatHoldService.convertHoldsToBooking(booking_id, booking.journey_id, booking.activity_instance_id);
       }
     } else if (status === 'failed') {
       booking.status = 'expired';
       await booking.save();
 
       // Release seat holds on payment failure
-      if (booking.journey_id) {
-        await seatHoldService.releaseSeats(booking.journey_id, [], req.user?.id);
+      if (booking.journey_id || booking.activity_instance_id) {
+        await seatHoldService.releaseSeats(
+          {
+            journeyId: booking.journey_id || null,
+            activityInstanceId: booking.activity_instance_id || null
+          },
+          [],
+          req.user?.id
+        );
       }
     }
 
@@ -113,8 +120,8 @@ const verifyPayment = async (req, res, next) => {
             await booking.save();
 
             // Convert seat holds
-            if (booking.journey_id) {
-              await seatHoldService.convertHoldsToBooking(payment.booking_id);
+            if (booking.journey_id || booking.activity_instance_id) {
+              await seatHoldService.convertHoldsToBooking(payment.booking_id, booking.journey_id, booking.activity_instance_id);
             }
           }
         }
@@ -172,8 +179,8 @@ const handleMPesaCallback = async (req, res, next) => {
         await booking.save();
 
         // Convert seat holds
-        if (booking.journey_id) {
-          await seatHoldService.convertHoldsToBooking(payment.booking_id);
+        if (booking.journey_id || booking.activity_instance_id) {
+          await seatHoldService.convertHoldsToBooking(payment.booking_id, booking.journey_id, booking.activity_instance_id);
         }
       }
     } else {
@@ -184,10 +191,17 @@ const handleMPesaCallback = async (req, res, next) => {
 
       // Release seats
       const booking = await Booking.findByPk(payment.booking_id);
-      if (booking && booking.journey_id) {
+      if (booking && (booking.journey_id || booking.activity_instance_id)) {
         booking.status = 'expired';
         await booking.save();
-        await seatHoldService.releaseSeats(booking.journey_id, [], booking.user_id);
+        await seatHoldService.releaseSeats(
+          {
+            journeyId: booking.journey_id || null,
+            activityInstanceId: booking.activity_instance_id || null
+          },
+          [],
+          booking.user_id
+        );
       }
     }
 

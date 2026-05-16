@@ -9,6 +9,12 @@ import { SeatSelector } from '../../components/booking/SeatSelector';
 import { PaymentModal } from '../../components/booking/PaymentModal';
 import { ArrowRight, ArrowLeft, Bus, Calendar, MapPin, Clock, Users, Loader2 } from 'lucide-react';
 
+const frontPositions: Record<'transport' | 'facility' | 'events', 'top' | 'left' | 'right'> = {
+  transport: 'left',
+  facility: 'top',
+  events: 'top',
+};
+
 type Step = 'search' | 'journey' | 'seats' | 'details' | 'payment';
 
 interface PassengerDetail {
@@ -256,6 +262,11 @@ export const TransportBookingAPI: React.FC = () => {
             occupiedSeats={Object.entries(availability.seat_map)
               .filter(([_, status]) => status === 'booked')
               .map(([code, _]) => code)}
+            heldSeats={Object.entries(availability.seat_map)
+              .filter(([_, status]) => status === 'holding')
+              .map(([code, _]) => code)}
+            frontPosition={frontPositions.transport}
+            typeSlug={selectedJourney?.Transport?.TransportType?.slug || 'bus'}
           />
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl p-6">
             <div className="flex items-center justify-between">

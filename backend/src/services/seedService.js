@@ -448,10 +448,37 @@ const createUserWithRole = async (definition, role) => {
   }
 
   if (role) {
-    await UserRole.findOrCreate({
-      where: { user_id: user.id, role_id: role.id },
-      defaults: { user_id: user.id, role_id: role.id }
-    });
+    // try to determine company_id for user_role
+    let companyId = null;
+    if (definition.company_slug) {
+      const comp = await Company.findOne({ where: { slug: definition.company_slug } });
+      if (comp) companyId = comp.id;
+    }
+
+    if (!companyId && definition.email) {
+      // infer company by matching email domain to company contact_email domain or slug
+      const domain = definition.email.split('@')[1] || '';
+      if (domain) {
+        const compByEmail = await Company.findOne({ where: { contact_email: { [Op.like]: `%@${domain}` } } });
+        if (compByEmail) companyId = compByEmail.id;
+        else {
+          // try slug contained in email (e.g., manager@kiliexpress.co.tz -> kiliexpress)
+          const companies = await Company.findAll();
+          for (const c of companies) {
+            if (definition.email.includes(c.slug) || domain.includes(c.slug)) {
+              companyId = c.id;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const whereClause = { user_id: user.id, role_id: role.id };
+    const defaults = { user_id: user.id, role_id: role.id };
+    if (companyId) defaults.company_id = companyId;
+
+    await UserRole.findOrCreate({ where: whereClause, defaults });
   }
 
   return user;
@@ -1363,8 +1390,8 @@ const seedTimetables = async (routes) => {
     { activity_slug: 'oppenheimer', date: '2026-05-12', startTime: '20:00', endTime: '23:00', availableSeats: 80, status: 'active' },
 
     // Sports events
-    { activity_slug: 'simba-vs-yanga', date: '2026-05-12', startTime: '16:00', endTime: '18:00', availableSeats: 4850, status: 'sold_out' },
-    { activity_slug: 'tanzania-vs-kenya', date: '2026-05-15', startTime: '15:00', endTime: '17:00', availableSeats: 58000, status: 'active' },
+    { activity_slug: 'simba-vs-yanga', date: '2026-05-20', startTime: '16:00', endTime: '18:00', availableSeats: 4850, status: 'sold_out' },
+    { activity_slug: 'tanzania-vs-kenya', date: '2026-05-30', startTime: '15:00', endTime: '17:00', availableSeats: 58000, status: 'active' },
     { activity_slug: 'azam-vs-kmc', date: '2026-05-16', startTime: '17:00', endTime: '19:00', availableSeats: 18000, status: 'active' },
 
     // Conferences & Concerts

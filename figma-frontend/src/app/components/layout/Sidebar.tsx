@@ -38,13 +38,13 @@ export const Sidebar: React.FC = () => {
       path: '/bookings',
       icon: <Ticket className="w-5 h-5" />,
       label: t('nav.bookings'),
-      roles: ['customer'],
+      roles: ['developer', 'super_admin', 'company_admin', 'staff', 'customer'],
     },
     {
       path: '/tickets',
       icon: <Ticket className="w-5 h-5" />,
       label: t('nav.tickets'),
-      roles: ['customer'],
+      roles: ['developer', 'super_admin', 'company_admin', 'staff', 'customer'],
     },
     {
       path: '/companies',

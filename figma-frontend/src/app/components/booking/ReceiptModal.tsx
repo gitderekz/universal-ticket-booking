@@ -203,19 +203,26 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ booking, onClose }) 
           <div className="flex gap-3">
             <button
               onClick={handleDownload}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              disabled={booking.status !== 'confirmed' && booking.status !== 'completed'}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg ${booking.status === 'confirmed' || booking.status === 'completed' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
             >
               <Download className="w-5 h-5" />
               Download PDF
             </button>
             <button
               onClick={handlePrint}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+              disabled={booking.status !== 'confirmed' && booking.status !== 'completed'}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg ${booking.status === 'confirmed' || booking.status === 'completed' ? 'border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
             >
               <Printer className="w-5 h-5" />
               Print
             </button>
           </div>
+          {booking.status !== 'confirmed' && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Download and print are only available after the booking is confirmed.
+            </p>
+          )}
         </div>
       </div>
     </div>

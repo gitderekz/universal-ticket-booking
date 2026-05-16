@@ -7,6 +7,12 @@ import { PaymentModal } from '../../components/booking/PaymentModal';
 import { apiClient } from '../../../services/apiClient';
 import { ArrowRight, ArrowLeft, Film, Calendar, Clock, Users, MapPin } from 'lucide-react';
 
+const frontPositions: Record<'transport' | 'facility' | 'events', 'top' | 'left' | 'right'> = {
+  transport: 'right',
+  facility: 'top',
+  events: 'top',
+};
+
 type Step = 'facility' | 'activity' | 'datetime' | 'seats' | 'details' | 'payment';
 
 export const FacilityBooking: React.FC = () => {
@@ -20,6 +26,9 @@ export const FacilityBooking: React.FC = () => {
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [selectedTimetable, setSelectedTimetable] = useState<string | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
+  const [heldSeats, setHeldSeats] = useState<string[]>([]);
+  const [seatAvailabilityLoading, setSeatAvailabilityLoading] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [facilities, setFacilities] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
@@ -59,6 +68,12 @@ export const FacilityBooking: React.FC = () => {
   const timetable = selectedTimetable ? timetables.find(tt => tt.id === selectedTimetable) : null;
   const company = facility ? companies.find(c => c.id === (facility.company_id || facility.companyId)) || facility.Company : null;
 
+  const formatTime = (dateTime: string | Date) => {
+    if (!dateTime) return '';
+    const date = new Date(dateTime);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+
   const filteredFacilities = category
     ? facilities.filter(f => 
         f.FacilityType?.category === category || 
@@ -70,12 +85,59 @@ export const FacilityBooking: React.FC = () => {
   const activityPrice = parseFloat(activity?.base_price || activity?.price || '0') || 0;
   const totalPrice = activityPrice * selectedSeats.length;
 
-  const handleNext = () => {
+  const loadSeatAvailability = async (activityInstanceId: string) => {
+    setSeatAvailabilityLoading(true);
+    try {
+      const response = await apiClient.get('/seat-holds/availability', {
+        params: { activity_instance_id: activityInstanceId }
+      });
+      const seatMap = response.data?.seatMap || [];
+      setOccupiedSeats(seatMap.filter((seat: any) => seat.status === 'booked').map((seat: any) => seat.code));
+      setHeldSeats(seatMap.filter((seat: any) => seat.status === 'held').map((seat: any) => seat.code));
+    } catch (error) {
+      console.error('Failed to load facility seat availability:', error);
+      setOccupiedSeats([]);
+      setHeldSeats([]);
+    } finally {
+      setSeatAvailabilityLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedTimetable) {
+      loadSeatAvailability(selectedTimetable);
+    } else {
+      setOccupiedSeats([]);
+      setHeldSeats([]);
+    }
+  }, [selectedTimetable]);
+
+  const reserveSelectedSeats = async () => {
+    if (!selectedTimetable || selectedSeats.length === 0) return;
+    try {
+      await apiClient.post('/seat-holds/hold', {
+        activity_instance_id: selectedTimetable,
+        seat_codes: selectedSeats
+      });
+      await loadSeatAvailability(selectedTimetable);
+    } catch (error) {
+      console.error('Unable to reserve selected seats:', error);
+      throw error;
+    }
+  };
+
+  const handleNext = async () => {
     if (currentStep === 'facility' && selectedFacility) setCurrentStep('activity');
     else if (currentStep === 'activity' && selectedActivity) setCurrentStep('datetime');
     else if (currentStep === 'datetime' && selectedTimetable) setCurrentStep('seats');
-    else if (currentStep === 'seats' && selectedSeats.length > 0) setCurrentStep('details');
-    else if (currentStep === 'details') setShowPayment(true);
+    else if (currentStep === 'seats' && selectedSeats.length > 0) {
+      try {
+        await reserveSelectedSeats();
+        setCurrentStep('details');
+      } catch (error) {
+        alert('Some seats are no longer available. Please choose different seats.');
+      }
+    } else if (currentStep === 'details') setShowPayment(true);
   };
 
   const handleBack = () => {
@@ -186,12 +248,12 @@ export const FacilityBooking: React.FC = () => {
 
       {currentStep === 'datetime' && activity && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {timetables.filter(tt => (tt.activityId || tt.activity_id) === activity.id).map((timetable) => (
+          {timetables.filter(tt => (tt.activityId || tt.activity_id) === activity.id).map((tt) => (
             <button
-              key={timetable.id}
-              onClick={() => setSelectedTimetable(timetable.id)}
+              key={tt.id}
+              onClick={() => setSelectedTimetable(tt.id)}
               className={`bg-white dark:bg-gray-800 rounded-xl p-6 text-left border-2 transition-all ${
-                selectedTimetable === timetable.id
+                selectedTimetable === tt.id
                   ? 'border-blue-500 shadow-lg'
                   : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
               }`}
@@ -199,18 +261,20 @@ export const FacilityBooking: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Calendar className="w-5 h-5 text-blue-500" />
-                  <span className="font-bold text-gray-900 dark:text-white">{timetable.date}</span>
+                  <span className="font-bold text-gray-900 dark:text-white">
+                    {new Date(tt.start_at).toLocaleDateString()}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Clock className="w-5 h-5 text-blue-500" />
                   <span className="text-gray-700 dark:text-gray-300">
-                    {timetable.startTime} - {timetable.endTime}
+                    {formatTime(tt.start_at)} - {formatTime(tt.end_at)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Users className="w-5 h-5 text-green-500" />
                   <span className="text-gray-700 dark:text-gray-300">
-                    {timetable.availableSeats} seats available
+                    {tt.available_slots || tt.total_slots} seats available
                   </span>
                 </div>
               </div>
@@ -226,7 +290,10 @@ export const FacilityBooking: React.FC = () => {
             sittingLength={facility.sittingLength ?? facility.seatLayout?.rows ?? 0}
             selectedSeats={selectedSeats}
             onSeatsChange={setSelectedSeats}
-            occupiedSeats={['D5', 'D6', 'E10', 'F12']}
+            occupiedSeats={occupiedSeats}
+            heldSeats={heldSeats}
+            frontPosition={frontPositions.facility}
+            typeSlug={facility.category || facility.FacilityType?.category}
           />
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl p-6">
             <div className="flex items-center justify-between">
@@ -327,6 +394,7 @@ export const FacilityBooking: React.FC = () => {
               const bookingData = {
                 activity_instance_id: selectedTimetable,
                 booking_type: 'facility',
+                seat_codes: selectedSeats,
                 items: bookingItems,
                 total_amount: totalPrice,
                 passenger_count: selectedSeats.length,

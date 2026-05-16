@@ -5,9 +5,31 @@ const seatHoldService = require('../services/seatHoldService');
 const listBookings = async (req, res, next) => {
   try {
     const where = {};
-    if (req.user?.id) {
-      where.user_id = req.user.id;
+    const userRoles = req.user?.roles || [];
+    const isSuper = userRoles.includes('super_admin') || userRoles.includes('developer');
+    const isCompanyAdmin = userRoles.includes('company_admin') || userRoles.includes('staff');
+
+    // Role-based filtering
+    if (isSuper) {
+      // no extra where - super users see all bookings
+    } else if (isCompanyAdmin) {
+      // company admins and staff see bookings for their companies only
+      const companyIds = req.user?.company_ids || [];
+      if (companyIds.length > 0) {
+        where.company_id = companyIds;
+      } else {
+        // no company association, return empty
+        return res.json({ bookings: [] });
+      }
+    } else {
+      // default: customers see only their bookings
+      if (req.user?.id) {
+        where.user_id = req.user.id;
+      } else {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
     }
+
     const bookings = await Booking.findAll({
       where,
       include: [
@@ -95,9 +117,13 @@ const createBooking = async (req, res, next) => {
     const userId = req.user?.id || null;
     const sessionId = req.headers['x-socket-id'] || 'unknown';
 
-    // First, hold the seats
-    if (journey_id && seat_codes.length > 0) {
-      const holds = await seatHoldService.holdSeats(journey_id, seat_codes, userId, sessionId);
+    // First, hold the seats for transport or facility bookings
+    if (seat_codes.length > 0) {
+      const holdTarget = {
+        journeyId: journey_id || null,
+        activityInstanceId: activity_instance_id || null
+      };
+      const holds = await seatHoldService.holdSeats(holdTarget, seat_codes, userId, sessionId);
       if (!holds || holds.length === 0) {
         return res.status(400).json({ message: 'Failed to hold seats. They may be unavailable.' });
       }
@@ -123,12 +149,13 @@ const createBooking = async (req, res, next) => {
     });
 
     // Link seat holds to booking
-    if (journey_id && seat_codes.length > 0) {
+    if (seat_codes.length > 0) {
       await SeatHold.update(
         { booking_id: booking.id },
         {
           where: {
-            journey_id,
+            journey_id: journey_id || null,
+            activity_instance_id: activity_instance_id || null,
             seat_code: seat_codes,
             user_id: userId,
             status: 'holding'
@@ -170,7 +197,59 @@ const createBooking = async (req, res, next) => {
   }
 };
 
+const updateBookingStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const booking = await Booking.findByPk(id);
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const allowedStatuses = ['pending', 'holding', 'confirmed', 'cancelled', 'completed', 'expired'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid booking status' });
+    }
+
+    booking.status = status;
+    if (status === 'confirmed') {
+      booking.confirmed_at = new Date();
+      await seatHoldService.confirmHoldsForBooking(booking.id, booking.journey_id, booking.activity_instance_id);
+
+      // Create Payment record if one doesn't exist (for manual cash confirmation)
+      const existingPayment = await Payment.findOne({ where: { booking_id: booking.id } });
+      if (!existingPayment) {
+        await Payment.create({
+          booking_id: booking.id,
+          transaction_reference: `MANUAL-${booking.id}-${Date.now()}`,
+          method: 'cash',
+          provider: 'manual',
+          amount: booking.total_amount,
+          currency_id: booking.currency_id,
+          exchange_rate_snapshot: booking.exchange_rate_snapshot,
+          status: 'completed',
+          paid_at: new Date(),
+          response_json: { type: 'manual_cash_confirmation', confirmedBy: req.user?.id }
+        });
+      }
+    }
+    if (status === 'cancelled') {
+      booking.cancelled_at = new Date();
+      await seatHoldService.releaseHoldsForBooking(booking.id, booking.journey_id, booking.activity_instance_id);
+    }
+    if (status === 'expired') {
+      await seatHoldService.releaseHoldsForBooking(booking.id, booking.journey_id, booking.activity_instance_id);
+    }
+
+    await booking.save();
+    return res.json({ booking, message: `Booking status updated to ${status}` });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listBookings,
-  createBooking
+  createBooking,
+  updateBookingStatus
 };

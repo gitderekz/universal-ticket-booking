@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 router.post('/hold', authMiddleware, seatHoldController.holdSeats);
 router.post('/release', authMiddleware, seatHoldController.releaseSeats);
+router.get('/availability', seatHoldController.getAvailability);
 router.get('/:journey_id/availability', seatHoldController.getAvailability);
 
 module.exports = router;

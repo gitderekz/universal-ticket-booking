@@ -11,6 +11,8 @@ import {
   Eye, Ban, RefreshCw
 } from 'lucide-react';
 
+type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed' | 'holding' | 'expired';
+
 interface BookingRecord {
   id: string;
   customerName: string;
@@ -21,15 +23,26 @@ interface BookingRecord {
   time: string;
   seats: number;
   amount: number;
-  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
+  status: BookingStatus;
   paymentStatus: 'paid' | 'pending' | 'failed';
 }
 
-const statusConfig: Record<string, { label: string; bg: string; dot: string }> = {
+const statusConfig: Record<BookingStatus, { label: string; bg: string; dot: string }> = {
   confirmed: { label: 'Confirmed', bg: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', dot: 'bg-green-500' },
   pending: { label: 'Pending', bg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', dot: 'bg-amber-500' },
   cancelled: { label: 'Cancelled', bg: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', dot: 'bg-red-500' },
   completed: { label: 'Completed', bg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300', dot: 'bg-blue-500' },
+  holding: { label: 'Holding', bg: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', dot: 'bg-gray-500' },
+  expired: { label: 'Expired', bg: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', dot: 'bg-red-500' },
+};
+
+const getStatusConfig = (status: string) => {
+  const normalized = status?.toString().trim().toLowerCase();
+  return statusConfig[normalized as BookingStatus] || {
+    label: normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Unknown',
+    bg: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    dot: 'bg-gray-500',
+  };
 };
 
 const paymentConfig: Record<string, string> = {
@@ -50,24 +63,36 @@ export const BookingsOverview: React.FC = () => {
   const [filterType, setFilterType] = useState('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const isCustomer = user?.role === 'customer';
 
   useEffect(() => {
     const loadBookings = async () => {
       try {
-        const response = await apiClient.get('/booking');
-        const transformedBookings = (response.data || []).map((b: any) => ({
-          id: b.id || b.booking_number || 'UNKNOWN',
-          customerName: b.customer_name || b.customerName || 'Unknown',
-          customerPhone: b.customer_phone || b.customerPhone || '',
-          type: b.type === 'transport' ? 'Transport' : 'Facility' as 'Transport' | 'Facility',
-          route: b.route || b.title || '',
-          date: b.date || new Date().toISOString().split('T')[0],
-          time: b.time || '00:00',
-          seats: b.seats || 0,
-          amount: b.amount || b.total_price || 0,
-          status: b.status || 'pending' as BookingRecord['status'],
-          paymentStatus: (b.payment_status || b.paymentStatus || 'pending') as 'paid' | 'pending' | 'failed',
-        }));
+        const response = await apiClient.get('/bookings');
+        const transformedBookings = (response.data.bookings || response.data || []).map((b: any) => {
+          const rawStatus = String(b.status || 'pending').trim().toLowerCase();
+          const normalizedStatus = ['confirmed', 'pending', 'cancelled', 'completed', 'holding', 'expired'].includes(rawStatus)
+            ? rawStatus
+            : 'pending';
+          const rawPaymentStatus = String(b.payment_status || b.paymentStatus || 'pending').trim().toLowerCase();
+          const normalizedPaymentStatus = ['paid', 'pending', 'failed'].includes(rawPaymentStatus)
+            ? rawPaymentStatus
+            : 'pending';
+
+          return {
+            id: b.id || b.booking_number || 'UNKNOWN',
+            customerName: b.customer_name || b.customerName || 'Unknown',
+            customerPhone: b.customer_phone || b.customerPhone || '',
+            type: b.type === 'transport' ? 'Transport' : 'Facility' as 'Transport' | 'Facility',
+            route: b.route || b.title || '',
+            date: b.date || new Date().toISOString().split('T')[0],
+            time: b.time || '00:00',
+            seats: b.seats || 0,
+            amount: b.amount || b.total_price || 0,
+            status: normalizedStatus as BookingRecord['status'],
+            paymentStatus: normalizedPaymentStatus as 'paid' | 'pending' | 'failed',
+          };
+        });
         setBookings(transformedBookings);
       } catch (error) {
         console.error('Error loading bookings:', error);
@@ -77,10 +102,18 @@ export const BookingsOverview: React.FC = () => {
     loadBookings();
   }, []);
 
-  const handleStatusChange = (id: string, newStatus: BookingRecord['status']) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
-    const booking = bookings.find(b => b.id === id);
-    addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Updated booking ${id} status to ${newStatus}`, module: 'Bookings', status: 'success', details: booking?.route });
+  const handleStatusChange = async (id: string, newStatus: BookingRecord['status']) => {
+    if (isCustomer) return;
+    try {
+      const response = await apiClient.patch(`/bookings/${id}/status`, { status: newStatus });
+      const updatedBooking = response.data.booking;
+      setBookings(prev => prev.map(b => b.id === id ? { ...b, status: updatedBooking.status } : b));
+      const booking = bookings.find(b => b.id === id);
+      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Updated booking ${id} status to ${newStatus}`, module: 'Bookings', status: 'success', details: booking?.route });
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Failed to update booking ${id}`, module: 'Bookings', status: 'failed', details: error instanceof Error ? error.message : String(error) });
+    }
   };
 
   const filtered = bookings
@@ -176,7 +209,7 @@ export const BookingsOverview: React.FC = () => {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               <AnimatePresence initial={false}>
                 {filtered.map((booking, i) => {
-                  const sc = statusConfig[booking.status];
+                  const sc = getStatusConfig(booking.status);
                   const isExpanded = expandedId === booking.id;
                   return (
                     <React.Fragment key={booking.id}>
@@ -237,29 +270,36 @@ export const BookingsOverview: React.FC = () => {
                                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
                                   <Eye className="w-4 h-4" /> Quick Actions:
                                 </span>
-                                {booking.status !== 'confirmed' && (
-                                  <button onClick={() => handleStatusChange(booking.id, 'confirmed')}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded-lg text-xs font-medium hover:bg-green-200 transition-colors">
-                                    <CheckCircle className="w-3.5 h-3.5" /> Confirm
-                                  </button>
+                                {!isCustomer && (
+                                  <>
+                                    {booking.status !== 'confirmed' && (
+                                      <button onClick={() => handleStatusChange(booking.id, 'confirmed')}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded-lg text-xs font-medium hover:bg-green-200 transition-colors">
+                                        <CheckCircle className="w-3.5 h-3.5" /> Confirm
+                                      </button>
+                                    )}
+                                    {booking.status !== 'pending' && booking.status !== 'cancelled' && booking.status !== 'completed' && (
+                                      <button onClick={() => handleStatusChange(booking.id, 'pending')}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-lg text-xs font-medium hover:bg-amber-200 transition-colors">
+                                        <Clock className="w-3.5 h-3.5" /> Mark Pending
+                                      </button>
+                                    )}
+                                    {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                                      <button onClick={() => handleStatusChange(booking.id, 'completed')}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors">
+                                        <CheckCircle className="w-3.5 h-3.5" /> Complete
+                                      </button>
+                                    )}
+                                    {booking.status !== 'cancelled' && (
+                                      <button onClick={() => handleStatusChange(booking.id, 'cancelled')}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 rounded-lg text-xs font-medium hover:bg-red-200 transition-colors">
+                                        <Ban className="w-3.5 h-3.5" /> Cancel
+                                      </button>
+                                    )}
+                                  </>
                                 )}
-                                {booking.status !== 'pending' && booking.status !== 'cancelled' && booking.status !== 'completed' && (
-                                  <button onClick={() => handleStatusChange(booking.id, 'pending')}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-lg text-xs font-medium hover:bg-amber-200 transition-colors">
-                                    <Clock className="w-3.5 h-3.5" /> Mark Pending
-                                  </button>
-                                )}
-                                {booking.status !== 'completed' && booking.status !== 'cancelled' && (
-                                  <button onClick={() => handleStatusChange(booking.id, 'completed')}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors">
-                                    <CheckCircle className="w-3.5 h-3.5" /> Complete
-                                  </button>
-                                )}
-                                {booking.status !== 'cancelled' && (
-                                  <button onClick={() => handleStatusChange(booking.id, 'cancelled')}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 rounded-lg text-xs font-medium hover:bg-red-200 transition-colors">
-                                    <Ban className="w-3.5 h-3.5" /> Cancel
-                                  </button>
+                                {isCustomer && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">You can view your bookings here. Status actions are reserved for staff/admin.</p>
                                 )}
                               </div>
                             </td>

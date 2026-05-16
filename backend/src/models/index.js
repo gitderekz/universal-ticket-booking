@@ -135,6 +135,8 @@ SeatHold.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(SeatHold, { foreignKey: 'user_id' });
 Journey.hasMany(SeatHold, { foreignKey: 'journey_id' });
 SeatHold.belongsTo(Journey, { foreignKey: 'journey_id' });
+ActivityInstance.hasMany(SeatHold, { foreignKey: 'activity_instance_id' });
+SeatHold.belongsTo(ActivityInstance, { foreignKey: 'activity_instance_id' });
 Booking.hasMany(SeatHold, { foreignKey: 'booking_id' });
 SeatHold.belongsTo(Booking, { foreignKey: 'booking_id' });
 

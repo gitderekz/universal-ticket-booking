@@ -10,6 +10,12 @@ import { bookingService, seatHoldService } from '../../../services/bookingServic
 import apiClient from '../../../services/apiClient';
 import { ArrowRight, ArrowLeft, Bus, Calendar, MapPin, Clock, Users } from 'lucide-react';
 
+const frontPositions: Record<'transport' | 'facility' | 'events', 'top' | 'left' | 'right'> = {
+  transport: 'left',
+  facility: 'top',
+  events: 'top',
+};
+
 type Step = 'transport' | 'route' | 'datetime' | 'seats' | 'details' | 'payment';
 
 export const TransportBooking: React.FC = () => {
@@ -300,6 +306,8 @@ export const TransportBooking: React.FC = () => {
             onSeatsChange={setSelectedSeats}
             occupiedSeats={bookedSeats}
             heldSeats={heldSeats}
+            frontPosition={frontPositions.transport}
+            typeSlug={transportType}
           />
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl p-6">
             <div className="flex items-center justify-between">
