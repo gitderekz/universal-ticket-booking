@@ -116,7 +116,13 @@ export const BookingsOverview: React.FC = () => {
             seatsCount = 0;
           }
 
-          const amountNumber = Number(b.total_amount || b.amount || 0);
+          let amountNumber = 0;
+          if (Array.isArray(b.Payments) && b.Payments.length) {
+            amountNumber = b.Payments.reduce((ps: number, p: any) => ps + Number(p.amount || p.paid_amount || 0), 0);
+          }
+          if (!amountNumber) {
+            amountNumber = Number(b.total_amount || b.amount || 0);
+          }
 
           return {
             id: b.id || b.booking_code || 'UNKNOWN',

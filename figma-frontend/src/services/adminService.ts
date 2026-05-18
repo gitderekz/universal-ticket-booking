@@ -11,10 +11,25 @@ export interface User {
   company_id?: string;
   created_at: string;
   updated_at: string;
+  roles?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    UserRole?: {
+      company_id?: string;
+    };
+  }>;
   Roles?: Array<{
     id: string;
     name: string;
     slug: string;
+    UserRole?: {
+      company_id?: string;
+    };
+  }>;
+  ownedCompanies?: Array<{
+    id: string;
+    name: string;
   }>;
 }
 

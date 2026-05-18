@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { getFacilities, getCompanies, Company } from '../../../services/adminService';
+import { getFacilities, getCompanies, createFacility, updateFacility, deleteFacility, Company } from '../../../services/adminService';
 import { Plus, Warehouse, Edit, Trash2, Search, AlertTriangle, X, Film, Trophy, Calendar, TreePine, Home } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -115,7 +115,7 @@ export const FacilitiesPage = () => {
     loadFacilities();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) newErrors.name = 'Facility name is required';
@@ -130,62 +130,93 @@ export const FacilitiesPage = () => {
 
     const capacity = calculateCapacity(formData.sittingPlan, formData.sittingLength);
 
-    if (editingFacility) {
-      setFacilities(prev => prev.map(f =>
-        f.id === editingFacility.id
-          ? { ...f, ...formData, capacity }
-          : f
-      ));
+    try {
+      if (editingFacility) {
+        const payload = {
+          company_id: formData.companyId,
+          facility_type_slug: formData.type,
+          name: formData.name,
+          description: (editingFacility as any).description || '',
+          location: (editingFacility as any).location || {},
+          capacity,
+          base_price: (editingFacility as any).base_price || 0,
+          sittingPlan: formData.sittingPlan,
+          sittingLength: formData.sittingLength,
+          features: (editingFacility as any).features || {},
+          images: (editingFacility as any).images || [],
+          status: 'active'
+        };
+        const updated = await updateFacility(editingFacility.id, payload);
+        setFacilities(prev => prev.map(f => f.id === updated.id ? updated : f));
 
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Updated facility: ${formData.name}`,
-        module: 'facilities',
-        status: 'success',
-        details: `Category: ${formData.category}, Type: ${formData.type}, Capacity: ${capacity}`,
-      });
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Updated facility: ${formData.name}`,
+          module: 'facilities',
+          status: 'success',
+          details: `Category: ${formData.category}, Type: ${formData.type}, Capacity: ${capacity}`,
+        });
 
-      toast.success('Facility updated successfully');
-    } else {
-      const newFacility: Facility = {
-        id: `facility${Date.now()}`,
-        ...formData,
-        capacity,
-      };
+        toast.success('Facility updated successfully');
+      } else {
+        const payload = {
+          company_id: formData.companyId,
+          facility_type_slug: formData.type,
+          name: formData.name,
+          description: '',
+          location: {},
+          capacity,
+          base_price: 0,
+          sittingPlan: formData.sittingPlan,
+          sittingLength: formData.sittingLength,
+          features: {},
+          images: [],
+          status: 'active'
+        };
+        const created = await createFacility(payload);
+        setFacilities(prev => [created, ...prev]);
 
-      setFacilities(prev => [...prev, newFacility]);
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Created facility: ${formData.name}`,
+          module: 'facilities',
+          status: 'success',
+          details: `Category: ${formData.category}, Type: ${formData.type}, Capacity: ${capacity}`,
+        });
 
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Created facility: ${formData.name}`,
-        module: 'facilities',
-        status: 'success',
-        details: `Category: ${formData.category}, Type: ${formData.type}, Capacity: ${capacity}`,
-      });
+        toast.success('Facility created successfully');
+      }
 
-      toast.success('Facility created successfully');
+      setShowModal(false);
+      setEditingFacility(null);
+    } catch (error) {
+      console.error('Error saving facility:', error);
+      toast.error('Unable to save facility');
     }
-
-    setShowModal(false);
-    setEditingFacility(null);
   };
 
-  const handleDelete = (facility: Facility) => {
-    setFacilities(prev => prev.filter(f => f.id !== facility.id));
+  const handleDelete = async (facility: Facility) => {
+    try {
+      await deleteFacility(facility.id);
+      setFacilities(prev => prev.filter(f => f.id !== facility.id));
 
-    addLog({
-      userId: user?.id || '',
-      userName: user?.fullName || '',
-      action: `Deleted facility: ${facility.name}`,
-      module: 'facilities',
-      status: 'warning',
-      details: `Category: ${facility.category}, Type: ${facility.type}`,
-    });
+      addLog({
+        userId: user?.id || '',
+        userName: user?.fullName || '',
+        action: `Deleted facility: ${facility.name}`,
+        module: 'facilities',
+        status: 'warning',
+        details: `Category: ${facility.category}, Type: ${facility.type}`,
+      });
 
-    setDeleteConfirm(null);
-    toast.success('Facility deleted successfully');
+      setDeleteConfirm(null);
+      toast.success('Facility deleted successfully');
+    } catch (error) {
+      console.error('Error deleting facility:', error);
+      toast.error('Unable to delete facility');
+    }
   };
 
   return (
@@ -342,7 +373,7 @@ export const FacilitiesPage = () => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{facility.type ? facility.type.replace('_', ' ') : 'N/A'}</p>
+                    <p className="font-bold text-gray-900 dark:text-white">{facility.FacilityType?.name || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Capacity</p>

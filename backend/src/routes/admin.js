@@ -19,7 +19,8 @@ const {
   Booking,
   BookingItem,
   Payment,
-  Currency
+  Currency,
+  SystemLog
 } = require('../models');
 
 // Apply admin authentication to all routes
@@ -46,16 +47,35 @@ router.get('/users', async (req, res) => {
       include: [{
         model: Role,
         as: 'roles',
-        through: { attributes: [] },
+        through: { attributes: ['company_id'] },
         attributes: ['id', 'name', 'slug']
+      }, {
+        model: Company,
+        as: 'ownedCompanies',
+        attributes: ['id', 'name']
+      }, {
+        model: UserRole,
+        attributes: ['company_id', 'role_id'],
+        include: [{ model: Company, as: 'company', attributes: ['id', 'name'] }]
       }],
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [['created_at', 'DESC']]
     });
 
+    const usersWithCompany = users.rows.map(user => {
+      const plain = user.toJSON();
+      if ((!plain.Company || !plain.Company.name) && plain.UserRoles?.length) {
+        const userCompany = plain.UserRoles.find(ur => ur.company?.name)?.company;
+        if (userCompany) {
+          plain.Company = userCompany;
+        }
+      }
+      return plain;
+    });
+
     res.json({
-      users: users.rows,
+      users: usersWithCompany,
       pagination: {
         total: users.count,
         page: parseInt(page),
@@ -72,11 +92,16 @@ router.get('/users/:id', async (req, res) => {
     const user = await User.findByPk(req.params.id, {
       include: [{
         model: Role,
-        through: { attributes: [] },
+        through: { attributes: ['company_id'] },
         attributes: ['id', 'name', 'slug']
       }, {
         model: Company,
-        as: 'ownedCompanies'
+        as: 'ownedCompanies',
+        attributes: ['id', 'name']
+      }, {
+        model: UserRole,
+        attributes: ['company_id', 'role_id'],
+        include: [{ model: Company, as: 'company', attributes: ['id', 'name'] }]
       }]
     });
 
@@ -84,7 +109,15 @@ router.get('/users/:id', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(user);
+    const userPlain = user.toJSON();
+    if ((!userPlain.Company || !userPlain.Company.name) && userPlain.UserRoles?.length) {
+      const userCompany = userPlain.UserRoles.find(ur => ur.company?.name)?.company;
+      if (userCompany) {
+        userPlain.Company = userCompany;
+      }
+    }
+
+    res.json(userPlain);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching user', error: error.message });
   }
@@ -155,6 +188,61 @@ router.delete('/users/:id', async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting user', error: error.message });
+  }
+});
+
+// System Logs
+router.get('/system-logs', async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search, status, module } = req.query;
+    const offset = (page - 1) * limit;
+    const where = {};
+
+    if (search) {
+      where[Op.or] = [
+        { action: { [Op.like]: `%${search}%` } },
+        { module: { [Op.like]: `%${search}%` } },
+        { user_name: { [Op.like]: `%${search}%` } },
+        { details: { [Op.like]: `%${search}%` } }
+      ];
+    }
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+    if (module && module !== 'all') {
+      where.module = module;
+    }
+
+    const logs = await SystemLog.findAndCountAll({
+      where,
+      include: [{
+        model: User,
+        attributes: ['id', 'first_name', 'last_name', 'email']
+      }],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['timestamp', 'DESC']]
+    });
+
+    res.json({
+      logs: logs.rows,
+      pagination: {
+        total: logs.count,
+        page: parseInt(page),
+        pages: Math.ceil(logs.count / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching system logs', error: error.message });
+  }
+});
+
+router.delete('/system-logs', async (req, res) => {
+  try {
+    await SystemLog.destroy({ where: {} });
+    res.json({ message: 'System logs cleared successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error clearing system logs', error: error.message });
   }
 });
 
@@ -364,7 +452,7 @@ router.get('/transports', async (req, res) => {
         attributes: ['id', 'name']
       }, {
         model: TransportType,
-        attributes: ['id', 'name', 'category']
+        attributes: ['id', 'name', 'category', 'slug']
       }, {
         model: require('../models').SeatLayout,
         as: 'seatLayout',
@@ -409,7 +497,7 @@ router.get('/transports/:id', async (req, res) => {
         attributes: ['id', 'name']
       }, {
         model: TransportType,
-        attributes: ['id', 'name', 'category']
+        attributes: ['id', 'name', 'category', 'slug']
       }, {
         model: Route,
         include: [{

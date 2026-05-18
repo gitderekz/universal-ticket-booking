@@ -25,6 +25,7 @@ const FacilityTypeModel = require('./FacilityType');
 const FacilityModel = require('./Facility');
 const ActivityModel = require('./Activity');
 const ActivityInstanceModel = require('./ActivityInstance');
+const SystemLogModel = require('./SystemLog');
 const User = UserModel(sequelize);
 const Role = RoleModel(sequelize);
 const UserRole = UserRoleModel(sequelize);
@@ -41,6 +42,7 @@ const FacilityType = FacilityTypeModel(sequelize);
 const Facility = FacilityModel(sequelize);
 const Activity = ActivityModel(sequelize);
 const ActivityInstance = ActivityInstanceModel(sequelize);
+const SystemLog = SystemLogModel(sequelize);
 const Timetable = TimetableModel(sequelize);
 const Journey = JourneyModel(sequelize);
 const SeatLayout = SeatLayoutModel(sequelize);
@@ -70,6 +72,9 @@ Company.belongsTo(User, { as: 'owner', foreignKey: 'owner_id' });
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'ownedCompanies' });
 User.belongsTo(Currency, { foreignKey: 'preferred_currency_id', as: 'preferredCurrency' });
 Currency.hasMany(User, { foreignKey: 'preferred_currency_id' });
+
+UserRole.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+Company.hasMany(UserRole, { foreignKey: 'company_id', as: 'userRoles' });
 
 Company.hasMany(Transport, { foreignKey: 'company_id' });
 Transport.belongsTo(Company, { foreignKey: 'company_id' });
@@ -140,6 +145,10 @@ SeatHold.belongsTo(ActivityInstance, { foreignKey: 'activity_instance_id' });
 Booking.hasMany(SeatHold, { foreignKey: 'booking_id' });
 SeatHold.belongsTo(Booking, { foreignKey: 'booking_id' });
 
+// SystemLog associations
+SystemLog.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(SystemLog, { foreignKey: 'user_id' });
+
 module.exports = {
   sequelize,
   User,
@@ -165,5 +174,6 @@ module.exports = {
   FacilityType,
   Facility,
   Activity,
-  ActivityInstance
+  ActivityInstance,
+  SystemLog
 };

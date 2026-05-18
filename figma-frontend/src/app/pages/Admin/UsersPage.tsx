@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth, UserRole } from '../../../contexts/AuthContext';
+import { formatDateTime } from '../../../utils/dateFormatter';
 import {
   Plus, Edit, Trash2, Search, X, AlertTriangle, CheckCircle2,
   Users as UsersIcon, Shield, Mail, Phone, Eye, EyeOff, Ban, Loader2
@@ -13,6 +14,8 @@ import type { User } from '../../../services/adminService';
 interface UserAccount extends User {
   fullName?: string; // Computed from first_name + last_name
   role?: string; // Derived from Roles
+  company?: string; // Company name or affiliation
+  companyId?: string;
 }
 
 const MOCK_USERS: UserAccount[] = [];
@@ -74,11 +77,48 @@ export const UsersPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await getUsers(1, 100, searchTerm);
-      const processedUsers = (response.users || []).map((user: User) => ({
-        ...user,
-        fullName: `${user.first_name} ${user.last_name}`,
-        role: user.Roles?.[0]?.slug || 'customer'
-      }));
+      const processedUsers = (response.users || []).map((user: User) => {
+        // Resolve role from multiple possible shapes
+        const userRole = (
+          // direct role field
+          (user as any).role || (user as any).role_slug ||
+          // roles array
+          user.roles?.[0]?.slug || user.Roles?.[0]?.slug ||
+          // fallback
+          'customer'
+        );
+
+        // Try to get company from multiple possible fields
+        let company = '';
+        let companyId = '';
+        if ((user as any).Company?.name) {
+          company = (user as any).Company.name;
+          companyId = (user as any).Company.id;
+        } else if ((user as any).ownedCompanies && (user as any).ownedCompanies.length > 0) {
+          company = (user as any).ownedCompanies[0].name;
+          companyId = (user as any).ownedCompanies[0].id;
+        } else if ((user as any).UserRoles?.[0]?.company?.name) {
+          company = (user as any).UserRoles[0].company.name;
+          companyId = (user as any).UserRoles[0].company.id;
+        } else if ((user as any).userRoles?.[0]?.company?.name) {
+          company = (user as any).userRoles[0].company.name;
+          companyId = (user as any).userRoles[0].company.id;
+        } else if ((user as any).roles?.[0]?.UserRole?.company_id) {
+          companyId = (user as any).roles[0].UserRole.company_id;
+        } else if ((user as any).Roles?.[0]?.UserRole?.company_id) {
+          companyId = (user as any).Roles[0].UserRole.company_id;
+        } else if ((user as any).company_id) {
+          companyId = (user as any).company_id;
+        }
+
+        return {
+          ...user,
+          fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+          role: userRole,
+          company,
+          companyId
+        };
+      });
       setUsers(processedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -302,6 +342,7 @@ export const UsersPage: React.FC = () => {
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">User</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Contact</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Role</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Company</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Joined</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Actions</th>
@@ -311,7 +352,7 @@ export const UsersPage: React.FC = () => {
               <>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={7} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
                       {searchTerm || filterRole !== 'all' || filterStatus !== 'all' ? 'No users match your filters' : 'No users found'}
                     </td>
                   </tr>
@@ -341,8 +382,13 @@ export const UsersPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${roleColors[u.role]}`}>
-                        {u.role.replace('_', ' ')}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${roleColors[(u.role as UserRole) || 'customer']}`}>
+                        {(u.role || 'customer').replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {u.company || (u as any).Company?.name || u.companyId || (u.role !== 'customer' && u.role !== 'super_admin' && u.role !== 'developer' ? '—' : 'N/A')}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
@@ -351,7 +397,7 @@ export const UsersPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-400">
-                      {u.createdAt}
+                        {formatDateTime(u.created_at || (u as any).createdAt || (u as any).joined_at || (u as any).created, false)}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">

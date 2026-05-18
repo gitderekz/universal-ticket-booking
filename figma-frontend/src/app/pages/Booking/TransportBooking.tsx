@@ -57,6 +57,14 @@ export const TransportBooking: React.FC = () => {
   const transportSittingPlan = transport?.sittingPlan || transport?.seatLayout?.pattern || '2-2';
   const transportSittingLength = transport?.sittingLength ?? transport?.seatLayout?.rows ?? Math.max(6, Math.ceil((transport?.capacity || 50) / 4));
 
+  const routeStations: string[] = route
+    ? (route.RouteStations?.map((rs: any) => rs.station?.name || rs.Station?.name || rs.station || rs.Station || rs.name || '').filter(Boolean) || route.stations?.map((s: any) => (typeof s === 'string' ? s : s.name || '')).filter(Boolean) || [])
+    : [];
+  const routeHasStationSelection = routeStations.length > 1;
+  const selectedRouteTitle = route
+    ? `${route.startLocation || route.originStation?.name || 'Origin'} → ${route.endLocation || route.destinationStation?.name || 'Destination'}`
+    : null;
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -140,7 +148,7 @@ export const TransportBooking: React.FC = () => {
 
   const calculatePrice = () => {
     if (!route) return 0;
-    const routeStations = (route.RouteStations?.map((rs: any) => rs.station).filter(Boolean) || route.stations || []);
+    const routeStations = (route.RouteStations?.map((rs: any) => rs.station || rs.Station).filter(Boolean) || route.stations || []);
     const startIdx = routeStations.findIndex((s: any) => s.name === startStation);
     const endIdx = routeStations.findIndex((s: any) => s.name === endStation);
     const routePrice = route.base_price || route.price || 0;
@@ -148,12 +156,25 @@ export const TransportBooking: React.FC = () => {
     return routePrice;
   };
 
+  const routeStationOptions = routeStations.length > 0
+    ? routeStations
+    : selectedRouteTitle
+      ? [selectedRouteTitle.split(' → ')[0], selectedRouteTitle.split(' → ')[1]].filter(Boolean)
+      : [];
+
   const totalPrice = calculatePrice() * selectedSeats.length;
 
   const handleNext = () => {
     if (currentStep === 'transport' && selectedTransport) setCurrentStep('route');
-    else if (currentStep === 'route' && selectedRoute) setCurrentStep('datetime');
-    else if (currentStep === 'datetime' && selectedTimetable) setCurrentStep('seats');
+    else if (
+      currentStep === 'route' &&
+      selectedRoute &&
+      startStation &&
+      endStation &&
+      startStation !== endStation
+    ) {
+      setCurrentStep('datetime');
+    } else if (currentStep === 'datetime' && selectedTimetable) setCurrentStep('seats');
     else if (currentStep === 'seats' && selectedSeats.length > 0) setCurrentStep('details');
     else if (currentStep === 'details') setShowPayment(true);
   };
@@ -221,63 +242,114 @@ export const TransportBooking: React.FC = () => {
       )}
 
       {currentStep === 'route' && transport && (
-        <div className="space-y-4">
-          {routes.filter(r => (r.transport_id || r.transportId) === transport.id).map((route) => {
-            const routeStations = (route.RouteStations?.map((rs: any) => rs.station).filter(Boolean) || route.stations || []);
-            const fallbackStations = routeStations.length > 0 ? routeStations : [
-              { id: `${route.id}-origin`, name: route.originStation?.name || 'Origin' },
-              { id: `${route.id}-destination`, name: route.destinationStation?.name || 'Destination' }
-            ];
-            const startLoc = route.startLocation || route.originStation?.name || 'Unknown';
-            const endLoc = route.endLocation || route.destinationStation?.name || 'Unknown';
-            const routePrice = route.base_price || route.price || 0;
-            return (
-            <button
-              key={route.id}
-              onClick={() => {
-                setSelectedRoute(route.id);
-                setStartStation(startLoc);
-                setEndStation(endLoc);
-              }}
-              className={`w-full bg-white dark:bg-gray-800 rounded-xl p-6 text-left border-2 transition-all ${
-                selectedRoute === route.id
-                  ? 'border-blue-500 shadow-lg'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <MapPin className="w-6 h-6 text-blue-500" />
-                  <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">
-                      {startLoc} → {endLoc}
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {fallbackStations.length} stations
-                    </p>
+        <div className="space-y-6">
+          <div className="space-y-4">
+            {routes.filter(r => (r.transport_id || r.transportId) === transport.id).map((route) => {
+              const routeStations = (route.RouteStations?.map((rs: any) => rs.station || rs.Station).filter(Boolean) || route.stations || []);
+              const fallbackStations = routeStations.length > 0 ? routeStations : [
+                { id: `${route.id}-origin`, name: route.originStation?.name || 'Origin' },
+                { id: `${route.id}-destination`, name: route.destinationStation?.name || 'Destination' }
+              ];
+              const startLoc = route.startLocation || route.originStation?.name || 'Unknown';
+              const endLoc = route.endLocation || route.destinationStation?.name || 'Unknown';
+              const routePrice = route.base_price || route.price || 0;
+              const routeStationNames = (route.RouteStations?.map((rs: any) => rs.station?.name || rs.Station?.name || rs.station || rs.Station || rs.name || '').filter(Boolean) || route.stations?.map((s: any) => (typeof s === 'string' ? s : s.name || '')).filter(Boolean) || []);
+              return (
+              <button
+                key={route.id}
+                onClick={() => {
+                  setSelectedRoute(route.id);
+                  if (routeStationNames.length > 1) {
+                    setStartStation('');
+                    setEndStation('');
+                  } else {
+                    setStartStation(startLoc);
+                    setEndStation(endLoc);
+                  }
+                }}
+                className={`w-full bg-white dark:bg-gray-800 rounded-xl p-6 text-left border-2 transition-all ${
+                  selectedRoute === route.id
+                    ? 'border-blue-500 shadow-lg'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <MapPin className="w-6 h-6 text-blue-500" />
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white text-lg">
+                        {startLoc} → {endLoc}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {fallbackStations.length} stations
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-blue-500">{formatPrice(routePrice)}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-blue-500">{formatPrice(routePrice)}</p>
+                <div className="flex flex-wrap gap-2">
+                  {fallbackStations.map((station: any) => (
+                    <span
+                      key={station.id}
+                      className={`px-3 py-1 rounded-full text-sm ${
+                        station.isBreakStop
+                          ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {station.name}
+                    </span>
+                  ))}
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {fallbackStations.map((station: any) => (
-                  <span
-                    key={station.id}
-                    className={`px-3 py-1 rounded-full text-sm ${
-                      station.isBreakStop
-                        ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {station.name}
-                  </span>
-                ))}
-              </div>
-            </button>
-          );
-          })}
+              </button>
+            );
+            })}
+          </div>
+
+          {selectedRoute && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                Select start and end stations
+              </h2>
+              {routeHasStationSelection ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Start Station</label>
+                    <select
+                      value={startStation}
+                      onChange={(e) => setStartStation(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Choose a start station</option>
+                      {routeStationOptions.map((station) => (
+                        <option key={station} value={station}>{station}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">End Station</label>
+                    <select
+                      value={endStation}
+                      onChange={(e) => setEndStation(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Choose an end station</option>
+                      {routeStationOptions.map((station) => (
+                        <option key={station} value={station}>{station}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400">This route uses the default start and end stations: {selectedRouteTitle}</p>
+              )}
+              {selectedRoute && startStation && endStation && startStation === endStation && (
+                <p className="mt-3 text-sm text-red-600 dark:text-red-400">Start and end stations cannot be the same. Please choose different stations.</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -397,7 +469,7 @@ export const TransportBooking: React.FC = () => {
           onClick={handleNext}
           disabled={
             (currentStep === 'transport' && !selectedTransport) ||
-            (currentStep === 'route' && !selectedRoute) ||
+            (currentStep === 'route' && (!selectedRoute || !startStation || !endStation || startStation === endStation)) ||
             (currentStep === 'datetime' && !selectedTimetable) ||
             (currentStep === 'seats' && selectedSeats.length === 0)
           }

@@ -3,7 +3,22 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { getTimetables, getRoutes, getActivities } from '../../../services/managementService';
+import { formatDateTime, formatDate, formatTime12Hour, formatDateTimeRange } from '../../../utils/dateFormatter';
+import {
+  getTimetables,
+  getRoutes,
+  getActivities,
+  createJourney,
+  updateJourney,
+  deleteJourney,
+  getActivityInstances,
+  createActivityInstance,
+  updateActivityInstance,
+  deleteActivityInstance,
+  RouteItem,
+  ActivityItem,
+  TimetableItem
+} from '../../../services/managementService';
 import {
   Plus, Calendar, Clock, Edit, Trash2, Search, Bus, Film,
   X, AlertTriangle, CheckCircle2, ChevronRight, Users,
@@ -36,14 +51,18 @@ const convertTo12Hour = (time24: string) => {
   return `${time24} (${displayHour}:${minutes} ${period})`;
 };
 
-const emptyForm = (): Partial<Timetable> => ({
+const emptyForm = (): Partial<TimetableItem> => ({
   routeId: '',
   activityId: '',
   date: new Date().toISOString().split('T')[0],
+  journey_date: new Date().toISOString().split('T')[0],
   startTime: '08:00',
   endTime: '10:00',
+  departure_at: '08:00',
+  arrival_at: '10:00',
   availableSeats: 40,
-  status: 'active',
+  available_seats: 40,
+  status: 'scheduled',
 });
 
 export const TimetablesManagement: React.FC = () => {
@@ -63,7 +82,7 @@ export const TimetablesManagement: React.FC = () => {
   const [form, setForm] = useState<any>(emptyForm());
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const [deleteTarget, setDeleteTarget] = useState<Timetable | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
@@ -90,12 +109,36 @@ export const TimetablesManagement: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [ttData, routeData, activityData] = await Promise.all([
+        const [journeyData, routeData, activityData, activityInstances] = await Promise.all([
           getTimetables(),
           getRoutes(),
           getActivities(),
+          getActivityInstances()
         ]);
-        setTimetables(ttData || []);
+
+        const journeyItems = (journeyData || []).map((journey) => ({
+          ...journey,
+          type: 'journey',
+          routeId: journey.route_id,
+          activityId: undefined,
+          startTime: journey.departure_at,
+          endTime: journey.arrival_at,
+          availableSeats: journey.available_seats,
+          status: journey.status || 'scheduled',
+        }));
+
+        const activityItems = (activityInstances || []).map((instance) => ({
+          ...instance,
+          type: 'activity_instance',
+          routeId: undefined,
+          activityId: instance.activity_id,
+          startTime: instance.start_at,
+          endTime: instance.end_at,
+          availableSeats: instance.available_slots,
+          status: instance.status,
+        }));
+
+        setTimetables([...journeyItems, ...activityItems]);
         setRoutes(routeData || []);
         setActivities(activityData || []);
       } catch (error) {
@@ -121,6 +164,11 @@ export const TimetablesManagement: React.FC = () => {
       ...tt,
       routeId: tt.routeId || tt.route_id || '',
       activityId: tt.activityId || tt.activity_id || '',
+      date: tt.date || tt.journey_date || '',
+      startTime: tt.startTime || tt.departure_at || tt.start_at || '',
+      endTime: tt.endTime || tt.arrival_at || tt.end_at || '',
+      availableSeats: tt.availableSeats || tt.available_seats || tt.available_slots || 0,
+      status: tt.status,
     });
     setFormErrors({});
     setShowModal(true);
@@ -138,34 +186,114 @@ export const TimetablesManagement: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    const label = editTarget ? getTimetableLabel(editTarget) : getTimetableLabel(form);
-    if (editTarget) {
-      setTimetables(prev => prev.map(tt => tt.id === editTarget.id ? { ...editTarget, ...form } : tt));
-      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Edited timetable: ${label}`, module: 'Timetables', status: 'success', details: label });
-      showToast('Schedule updated successfully');
-    } else {
-      const newTt = {
-        ...form,
-        id: `tt_${Date.now()}`,
-        routeId: modalType === 'transport' ? form.routeId : undefined,
-        activityId: modalType === 'facility' ? form.activityId : undefined,
-      };
-      setTimetables(prev => [newTt, ...prev]);
-      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created timetable`, module: 'Timetables', status: 'success', details: label });
-      showToast('Schedule created successfully');
+
+    try {
+      const isTransport = modalType === 'transport';
+      const route = routes.find(r => r.id === form.routeId);
+      const activity = activities.find(a => a.id === form.activityId);
+      let savedItem: any;
+
+      if (editTarget) {
+        if (editTarget.type === 'journey') {
+          savedItem = await updateJourney(editTarget.id, {
+            route_id: form.routeId,
+            transport_id: route?.transport_id || route?.Transport?.id,
+            journey_date: form.date || form.journey_date,
+            departure_at: form.startTime || form.departure_at,
+            arrival_at: form.endTime || form.arrival_at,
+            available_seats: form.availableSeats,
+            status: form.status,
+          });
+          savedItem.type = 'journey';
+          savedItem.startTime = savedItem.departure_at;
+          savedItem.endTime = savedItem.arrival_at;
+          savedItem.availableSeats = savedItem.available_seats;
+        } else {
+          savedItem = await updateActivityInstance(editTarget.id, {
+            start_at: form.startTime || form.start_at,
+            end_at: form.endTime || form.end_at,
+            available_slots: form.availableSeats,
+            status: form.status,
+          });
+          savedItem.type = 'activity_instance';
+          savedItem.startTime = savedItem.start_at;
+          savedItem.endTime = savedItem.end_at;
+          savedItem.availableSeats = savedItem.available_slots;
+        }
+
+        setTimetables(prev => prev.map(tt => tt.id === editTarget.id ? { ...tt, ...savedItem } : tt));
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Edited timetable: ${getTimetableLabel(savedItem)}`, module: 'Timetables', status: 'success', details: getTimetableLabel(savedItem) });
+        showToast('Schedule updated successfully');
+      } else if (isTransport) {
+        if (!route) {
+          showToast('Selected route is unavailable', 'error');
+          return;
+        }
+        savedItem = await createJourney({
+          route_id: form.routeId,
+          transport_id: route.transport_id || route.Transport?.id,
+          journey_date: form.date || form.journey_date,
+          departure_at: form.startTime,
+          arrival_at: form.endTime,
+          available_seats: form.availableSeats,
+          status: form.status,
+        });
+        savedItem.type = 'journey';
+        savedItem.startTime = savedItem.departure_at;
+        savedItem.endTime = savedItem.arrival_at;
+        savedItem.availableSeats = savedItem.available_seats;
+        setTimetables(prev => [savedItem, ...prev]);
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created timetable: ${getTimetableLabel(savedItem)}`, module: 'Timetables', status: 'success', details: getTimetableLabel(savedItem) });
+        showToast('Schedule created successfully');
+      } else {
+        if (!activity) {
+          showToast('Selected activity is unavailable', 'error');
+          return;
+        }
+        savedItem = await createActivityInstance({
+          activity_id: form.activityId,
+          facility_id: activity.facility_id || activity.Facility?.id,
+          start_at: form.startTime,
+          end_at: form.endTime,
+          total_slots: form.availableSeats,
+          available_slots: form.availableSeats,
+          status: form.status,
+        });
+        savedItem.type = 'activity_instance';
+        savedItem.startTime = savedItem.start_at;
+        savedItem.endTime = savedItem.end_at;
+        savedItem.availableSeats = savedItem.available_slots;
+        setTimetables(prev => [savedItem, ...prev]);
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created timetable: ${getTimetableLabel(savedItem)}`, module: 'Timetables', status: 'success', details: getTimetableLabel(savedItem) });
+        showToast('Schedule created successfully');
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving timetable:', error);
+      showToast('Unable to save timetable', 'error');
     }
-    setShowModal(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    const label = getTimetableLabel(deleteTarget);
-    setTimetables(prev => prev.filter(tt => tt.id !== deleteTarget.id));
-    addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Deleted timetable: ${label}`, module: 'Timetables', status: 'success', details: label });
-    showToast(`Schedule deleted`);
-    setDeleteTarget(null);
+    try {
+      if (deleteTarget.type === 'journey') {
+        await deleteJourney(deleteTarget.id);
+      } else {
+        await deleteActivityInstance(deleteTarget.id);
+      }
+      const label = getTimetableLabel(deleteTarget);
+      setTimetables(prev => prev.filter(tt => tt.id !== deleteTarget.id));
+      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Deleted timetable: ${label}`, module: 'Timetables', status: 'success', details: label });
+      showToast('Schedule deleted');
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Error deleting timetable:', error);
+      showToast('Unable to delete timetable', 'error');
+    }
   };
 
   const filtered = timetables.filter(tt => {
@@ -311,7 +439,7 @@ export const TimetablesManagement: React.FC = () => {
                       <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       <div>
                         <p className="text-xs text-gray-400">Date</p>
-                        <p className="font-medium text-gray-800 dark:text-white">{tt.date}</p>
+                        <p className="font-medium text-gray-800 dark:text-white">{formatDate(tt.date || tt.journey_date)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
@@ -325,14 +453,14 @@ export const TimetablesManagement: React.FC = () => {
                       <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       <div>
                         <p className="text-xs text-gray-400">Departure</p>
-                        <p className="font-medium text-gray-800 dark:text-white">{convertTo12Hour(tt.startTime)}</p>
+                        <p className="font-medium text-gray-800 dark:text-white">{formatTime12Hour(tt.startTime || tt.departure_at, false)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       <div>
                         <p className="text-xs text-gray-400">Arrival</p>
-                        <p className="font-medium text-gray-800 dark:text-white">{convertTo12Hour(tt.endTime)}</p>
+                        <p className="font-medium text-gray-800 dark:text-white">{formatTime12Hour(tt.endTime || tt.arrival_at, false)}</p>
                       </div>
                     </div>
                   </div>

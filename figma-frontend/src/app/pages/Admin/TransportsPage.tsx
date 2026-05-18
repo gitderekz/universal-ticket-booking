@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { getTransports, getCompanies, Company, Transport } from '../../../services/adminService';
+import { getTransports, getCompanies, createTransport, updateTransport, deleteTransport, Company, Transport } from '../../../services/adminService';
 import { Plus, Bus, Edit, Trash2, Search, AlertTriangle, X, Plane, Ship, Train } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -101,7 +101,7 @@ export const TransportsPage = () => {
     return seats * length;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) newErrors.name = 'Transport name is required';
@@ -116,62 +116,87 @@ export const TransportsPage = () => {
 
     const capacity = calculateCapacity(formData.sittingPlan, formData.sittingLength);
 
-    if (editingTransport) {
-      setTransports(prev => prev.map(t =>
-        t.id === editingTransport.id
-          ? { ...t, ...formData, capacity }
-          : t
-      ));
+    try {
+      if (editingTransport) {
+        const payload = {
+          company_id: formData.companyId,
+          transport_type_slug: formData.type,
+          name: formData.name,
+          registration_number: (editingTransport as any).registration_number || '',
+          capacity,
+          description: (editingTransport as any).description || '',
+          sittingPlan: formData.sittingPlan,
+          sittingLength: formData.sittingLength,
+          status: 'active'
+        };
+        const updated = await updateTransport(editingTransport.id, payload);
+        setTransports(prev => prev.map(t => t.id === updated.id ? updated : t));
 
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Updated transport: ${formData.name}`,
-        module: 'transports',
-        status: 'success',
-        details: `Type: ${formData.type}, Capacity: ${capacity} seats`,
-      });
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Updated transport: ${formData.name}`,
+          module: 'transports',
+          status: 'success',
+          details: `Type: ${formData.type}, Capacity: ${capacity} seats`,
+        });
 
-      toast.success('Transport updated successfully');
-    } else {
-      const newTransport: Transport = {
-        id: `transport${Date.now()}`,
-        ...formData,
-        capacity,
-      };
+        toast.success('Transport updated successfully');
+      } else {
+        const payload = {
+          company_id: formData.companyId,
+          transport_type_slug: formData.type,
+          name: formData.name,
+          registration_number: '',
+          capacity,
+          description: '',
+          sittingPlan: formData.sittingPlan,
+          sittingLength: formData.sittingLength,
+          status: 'active'
+        };
+        const created = await createTransport(payload);
+        setTransports(prev => [created, ...prev]);
 
-      setTransports(prev => [...prev, newTransport]);
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Created transport: ${formData.name}`,
+          module: 'transports',
+          status: 'success',
+          details: `Type: ${formData.type}, Capacity: ${capacity} seats`,
+        });
 
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Created transport: ${formData.name}`,
-        module: 'transports',
-        status: 'success',
-        details: `Type: ${formData.type}, Capacity: ${capacity} seats`,
-      });
+        toast.success('Transport created successfully');
+      }
 
-      toast.success('Transport created successfully');
+      setShowModal(false);
+      setEditingTransport(null);
+    } catch (error) {
+      console.error('Error saving transport:', error);
+      toast.error('Unable to save transport');
     }
-
-    setShowModal(false);
-    setEditingTransport(null);
   };
 
-  const handleDelete = (transport: Transport) => {
-    setTransports(prev => prev.filter(t => t.id !== transport.id));
+  const handleDelete = async (transport: Transport) => {
+    try {
+      await deleteTransport(transport.id);
+      setTransports(prev => prev.filter(t => t.id !== transport.id));
 
-    addLog({
-      userId: user?.id || '',
-      userName: user?.fullName || '',
-      action: `Deleted transport: ${transport.name}`,
-      module: 'transports',
-      status: 'warning',
-      details: `Type: ${transport.type}, Capacity: ${transport.capacity}`,
-    });
+      addLog({
+        userId: user?.id || '',
+        userName: user?.fullName || '',
+        action: `Deleted transport: ${transport.name}`,
+        module: 'transports',
+        status: 'warning',
+        details: `Type: ${transport.type}, Capacity: ${transport.capacity}`,
+      });
 
-    setDeleteConfirm(null);
-    toast.success('Transport deleted successfully');
+      setDeleteConfirm(null);
+      toast.success('Transport deleted successfully');
+    } catch (error) {
+      console.error('Error deleting transport:', error);
+      toast.error('Unable to delete transport');
+    }
   };
 
   return (
@@ -286,7 +311,8 @@ export const TransportsPage = () => {
         <AnimatePresence mode="popLayout">
           {filteredTransports.map((transport, index) => {
             const company = companies.find(c => c.id === transport.company_id) || transport.Company;
-            const transportTypeSlug = transport.TransportType?.slug || transport.transport_type_id || 'bus';
+            const transportTypeName = transport.TransportType?.name || 'Unknown';
+            const transportTypeSlug = transport.TransportType?.slug || 'bus';
             const Icon = getTransportIcon(transportTypeSlug);
             return (
               <motion.div
@@ -313,7 +339,7 @@ export const TransportsPage = () => {
                     </div>
                   </div>
                   <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-xs">
-                    {t(`transportTypes.${transportTypeSlug}`)}
+                    {transportTypeName}
                   </span>
                 </div>
 

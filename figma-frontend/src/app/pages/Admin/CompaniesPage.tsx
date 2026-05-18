@@ -56,8 +56,8 @@ export const CompaniesPage = () => {
 
   const stats = {
     total: companies.length,
-    transport: companies.filter(c => c.type === 'transport').length,
-    facility: companies.filter(c => c.type === 'facility').length,
+    transport: companies.filter(c => c.category === 'transport').length,
+    facility: companies.filter(c => c.category === 'facility').length,
   };
 
   const handleOpenModal = (company?: Company) => {

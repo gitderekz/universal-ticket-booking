@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { getActivities } from '../../../services/managementService';
+import { getActivities, createActivity, updateActivity, deleteActivity, ActivityItem } from '../../../services/managementService';
 import { getFacilities } from '../../../services/adminService';
 import {
   Plus, Edit, Trash2, Search, X, AlertTriangle, CheckCircle2,
@@ -118,30 +118,64 @@ export const ActivitiesManagement: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    if (editTarget) {
-      setActivities(prev => prev.map(a => a.id === editTarget.id ? { ...editTarget, ...form } as Activity : a));
-      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Edited activity: ${form.name}`, module: 'Activities', status: 'success', details: form.name });
-      showToast(`"${form.name}" updated successfully`);
-    } else {
-      const newActivity: Activity = {
-        ...form as Activity,
-        id: `act_${Date.now()}`,
-      };
-      setActivities(prev => [newActivity, ...prev]);
-      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created activity: ${form.name}`, module: 'Activities', status: 'success', details: form.name });
-      showToast(`"${form.name}" created successfully`);
+
+    try {
+      if (editTarget) {
+        const updated = await updateActivity(editTarget.id, {
+          facility_id: form.facilityId,
+          name: form.name,
+          description: form.description,
+          activity_type: form.type,
+          duration_minutes: form.duration ? parseInt(form.duration, 10) : undefined,
+          base_price: form.price,
+          category: form.genre || undefined,
+          requirements: form.requirements,
+          status: form.status,
+        });
+
+        setActivities(prev => prev.map(a => a.id === editTarget.id ? updated : a));
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Edited activity: ${form.name}`, module: 'Activities', status: 'success', details: form.name });
+        showToast(`"${form.name}" updated successfully`);
+      } else {
+        const created = await createActivity({
+          facility_id: form.facilityId!,
+          name: form.name!,
+          description: form.description,
+          activity_type: form.type || 'event',
+          duration_minutes: form.duration ? parseInt(form.duration, 10) : undefined,
+          max_participants: form.max_participants,
+          base_price: form.price,
+          category: form.genre,
+          requirements: form.requirements,
+          status: form.status,
+        });
+
+        setActivities(prev => [created, ...prev]);
+        addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Created activity: ${form.name}`, module: 'Activities', status: 'success', details: form.name });
+        showToast(`"${form.name}" created successfully`);
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving activity:', error);
+      showToast('Unable to save activity', 'error');
     }
-    setShowModal(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    setActivities(prev => prev.filter(a => a.id !== deleteTarget.id));
-    addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Deleted activity: ${deleteTarget.name}`, module: 'Activities', status: 'success', details: deleteTarget.name });
-    showToast(`"${deleteTarget.name}" deleted`);
-    setDeleteTarget(null);
+    try {
+      await deleteActivity(deleteTarget.id);
+      setActivities(prev => prev.filter(a => a.id !== deleteTarget.id));
+      addLog({ userId: user?.id || '', userName: user?.fullName || '', action: `Deleted activity: ${deleteTarget.name}`, module: 'Activities', status: 'success', details: deleteTarget.name });
+      showToast(`"${deleteTarget.name}" deleted`);
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      showToast('Unable to delete activity', 'error');
+    }
   };
 
   const filtered = activities.filter(a => {
@@ -308,7 +342,7 @@ export const ActivitiesManagement: React.FC = () => {
                       {activity.type}
                     </span>
                     <span className="text-lg font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                      <DollarSign className="w-4 h-4" />{formatPrice(activity.price)}
+                      <DollarSign className="w-4 h-4" />{formatPrice(activity.base_price || 0)}
                     </span>
                   </div>
 

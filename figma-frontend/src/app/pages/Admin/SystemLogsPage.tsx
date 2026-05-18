@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Download, Trash2, CheckCircle, XCircle, AlertTriangle, Info, ChevronDown, ChevronUp } from 'lucide-react';
-import { useSystemLogs } from '../../../contexts/SystemLogsContext';
+import { getSystemLogs, clearSystemLogs, SystemLog } from '../../../services/systemLogService';
 import { toast } from 'sonner';
 
 type StatusFilter = 'all' | 'success' | 'error' | 'warning' | 'info';
@@ -28,34 +28,37 @@ const moduleColors: Record<string, string> = {
 };
 
 export function SystemLogsPage() {
-  const { logs, clearLogs, addLog } = useSystemLogs();
+  const [logs, setLogs] = useState<SystemLog[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
 
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const matchesSearch =
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.module.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (log.details && log.details.toLowerCase().includes(searchQuery.toLowerCase()));
+  const fetchLogs = async (page = 1) => {
+    setLoading(true);
+    try {
+      const data = await getSystemLogs(page, ITEMS_PER_PAGE, searchQuery, statusFilter, moduleFilter);
+      setLogs(data.logs);
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error('Error fetching system logs:', error);
+      toast.error('Failed to load system logs');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const matchesStatus = statusFilter === 'all' || log.status === statusFilter;
-      const matchesModule = moduleFilter === 'all' || log.module === moduleFilter;
+  useEffect(() => {
+    fetchLogs(currentPage);
+  }, [currentPage, searchQuery, statusFilter, moduleFilter]);
 
-      return matchesSearch && matchesStatus && matchesModule;
-    });
-  }, [logs, searchQuery, statusFilter, moduleFilter]);
-
-  const totalPages = Math.ceil(filteredLogs.length / ITEMS_PER_PAGE);
-  const paginatedLogs = filteredLogs.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const filteredLogs = logs;
+  const totalPages = pagination.pages;
+  const paginatedLogs = filteredLogs;
 
   const stats = {
     total: logs.length,
@@ -64,19 +67,17 @@ export function SystemLogsPage() {
     warning: logs.filter(l => l.status === 'warning').length,
   };
 
-  const handleClearLogs = () => {
-    clearLogs();
-    addLog({
-      userId: 'current-user',
-      userName: 'Admin',
-      action: 'Cleared all system logs',
-      module: 'system',
-      status: 'warning',
-      details: `Cleared ${logs.length} log entries`,
-    });
-    setShowClearConfirm(false);
-    setCurrentPage(1);
-    toast.success('System logs cleared successfully');
+  const handleClearLogs = async () => {
+    try {
+      await clearSystemLogs();
+      setShowClearConfirm(false);
+      setCurrentPage(1);
+      await fetchLogs(1);
+      toast.success('System logs cleared successfully');
+    } catch (error) {
+      console.error('Error clearing system logs:', error);
+      toast.error('Failed to clear system logs');
+    }
   };
 
   const exportLogs = () => {

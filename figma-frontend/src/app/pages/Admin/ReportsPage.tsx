@@ -4,6 +4,7 @@ import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import { DollarSign, TrendingUp, Users, Calendar, Download, BarChart3, ShoppingCart } from 'lucide-react';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 import { getRoutes, getActivities } from '../../../services/managementService';
+import { getBookingAnalytics, getRevenueTrend, getTopItems } from '../../../services/reportsService';
 
 type TimePeriod = '7d' | '30d' | '90d' | '1y';
 
@@ -47,12 +48,31 @@ const categoryColors = [
 
 export function ReportsPage() {
   const [period, setPeriod] = useState<TimePeriod>('30d');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [useCustomDates, setUseCustomDates] = useState(false);
   const { formatPrice } = useCurrency();
   const [routes, setRoutes] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
 
+  const [analytics, setAnalytics] = useState<any | null>(null);
+  const [trendData, setTrendData] = useState<RevenueData[]>([]);
+  const [topItems, setTopItems] = useState<{ topRoutes: TopItem[]; topActivities: TopItem[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const getDateRange = () => {
+    if (useCustomDates && fromDate && toDate) return { from: fromDate, to: toDate };
+    const end = new Date();
+    const start = new Date();
+    if (period === '7d') start.setDate(end.getDate() - 7);
+    else if (period === '30d') start.setDate(end.getDate() - 30);
+    else if (period === '90d') start.setDate(end.getDate() - 90);
+    else if (period === '1y') start.setFullYear(end.getFullYear() - 1);
+    return { from: start.toISOString().split('T')[0], to: end.toISOString().split('T')[0] };
+  };
+
   useEffect(() => {
-    const loadData = async () => {
+    const loadStatic = async () => {
       try {
         const [routesRes, activitiesRes] = await Promise.all([
           getRoutes(),
@@ -64,69 +84,92 @@ export function ReportsPage() {
         console.error('Error loading reports data:', error);
       }
     };
-    loadData();
+    loadStatic();
   }, []);
 
-  // Generate revenue data based on actual routes and activities
-  const revenueData = useMemo(() => {
-    const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
-    const data: RevenueData[] = [];
-    const now = new Date();
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      try {
+        setLoading(true);
+        const range = getDateRange();
+        const [analyticsRes, trendRes, topRes] = await Promise.all([
+          getBookingAnalytics(range.from, range.to),
+          getRevenueTrend(range.from, range.to, period === '1y' ? 'month' : 'day'),
+          getTopItems(range.from, range.to, 5)
+        ]);
+        setAnalytics(analyticsRes || null);
+        setTrendData(trendRes || []);
+        setTopItems(topRes || null);
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAnalytics();
+  }, [period, fromDate, toDate, useCustomDates]);
 
-    // Calculate base revenue from routes and activities
-    const totalRouteRevenue = routes.reduce((sum, r) => sum + (r.base_price || r.price || 0), 0);
-    const totalActivityRevenue = activities.reduce((sum, a) => sum + (a.price || 0), 0);
-    const baseDaily = (totalRouteRevenue + totalActivityRevenue) / 10; // Average per day
+  const revenueData = useMemo(() => {
+    if (trendData && trendData.length > 0) {
+      return trendData.map((d) => ({ date: d.date, revenue: d.revenue, bookings: d.bookings }));
+    }
+
+    const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
+    const end = new Date();
+    const data: RevenueData[] = [];
 
     for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateStr = period === '1y' && i % 30 === 0
-        ? date.toLocaleDateString('en-US', { month: 'short' })
+      const date = new Date(end);
+      date.setDate(end.getDate() - i);
+      const dateStr = period === '1y'
+        ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
         : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      // Add some randomness to make it realistic
-      const variance = 0.7 + (Math.random() * 0.6); // 70% to 130% of base
-      const dailyRevenue = Math.floor(baseDaily * variance);
-      const dailyBookings = Math.floor((dailyRevenue / 50000) * (5 + Math.random() * 10));
 
       data.push({
         date: dateStr,
-        revenue: dailyRevenue,
-        bookings: dailyBookings,
+        revenue: 0,
+        bookings: 0,
       });
-    }
-
-    // Group by month for yearly view
-    if (period === '1y') {
-      const monthlyData: Record<string, RevenueData> = {};
-      data.forEach(item => {
-        if (!monthlyData[item.date]) {
-          monthlyData[item.date] = { date: item.date, revenue: 0, bookings: 0 };
-        }
-        monthlyData[item.date].revenue += item.revenue;
-        monthlyData[item.date].bookings += item.bookings;
-      });
-      return Object.values(monthlyData);
     }
 
     return data;
-  }, [period, routes, activities]);
+  }, [period, trendData]);
 
-  // Category distribution based on actual data
   const categoryData: CategoryData[] = useMemo(() => {
-    return [
-      { name: 'Transport', value: routes.length * 15, color: categoryColors[0] },
-      { name: 'Entertainment', value: activities.filter(a => a.activity_type === 'entertainment').length * 12, color: categoryColors[1] },
-      { name: 'Sports', value: activities.filter(a => a.activity_type === 'sports').length * 10, color: categoryColors[2] },
-      { name: 'Events', value: activities.filter(a => a.activity_type === 'events').length * 8, color: categoryColors[3] },
-      { name: 'Outdoor', value: activities.filter(a => a.activity_type === 'outdoor').length * 6, color: categoryColors[4] },
-      { name: 'Housing', value: activities.filter(a => a.activity_type === 'housing').length * 5, color: categoryColors[5] },
-    ];
-  }, [activities]);
+    if (analytics?.categoryBreakdown?.length) {
+      return analytics.categoryBreakdown.map((item: { name: string; value: number }, index: number) => ({
+        name: item.name,
+        value: item.value,
+        color: categoryColors[index % categoryColors.length]
+      }));
+    }
 
-  // Top routes based on actual route data
+    return [
+      { name: 'Transport', value: 0, color: categoryColors[0] },
+      { name: 'Entertainment', value: 0, color: categoryColors[1] },
+      { name: 'Sports', value: 0, color: categoryColors[2] },
+      { name: 'Events', value: 0, color: categoryColors[3] },
+      { name: 'Outdoor', value: 0, color: categoryColors[4] },
+      { name: 'Housing', value: 0, color: categoryColors[5] },
+    ];
+  }, [analytics]);
+
+  const totalRevenue = analytics?.totalRevenue ?? revenueData.reduce((sum, item) => sum + item.revenue, 0);
+  const totalBookings = analytics?.totalBookings ?? revenueData.reduce((sum, item) => sum + item.bookings, 0);
+  const avgDailyRevenue = analytics
+    ? Math.floor(analytics.totalRevenue / Math.max(revenueData.length, 1))
+    : Math.floor(totalRevenue / Math.max(revenueData.length, 1));
+  const avgBookingValue = analytics?.avgBookingValue ?? (totalBookings > 0 ? Math.floor(totalRevenue / totalBookings) : 0);
+
+  // Top routes based on backend data or route metadata fallback
   const topRoutes: TopItem[] = useMemo(() => {
+    if (topItems?.topRoutes?.length) {
+      return topItems.topRoutes.map(route => ({
+        name: route.name,
+        bookings: route.bookings,
+        revenue: route.revenue,
+      }));
+    }
     return routes
       .slice(0, 5)
       .map(route => {
@@ -140,10 +183,17 @@ export function ReportsPage() {
         };
       })
       .sort((a, b) => b.revenue - a.revenue);
-  }, [routes]);
+  }, [topItems, routes]);
 
-  // Top activities based on actual activity data
+  // Top activities based on backend data or activity metadata fallback
   const topActivities: TopItem[] = useMemo(() => {
+    if (topItems?.topActivities?.length) {
+      return topItems.topActivities.map(activity => ({
+        name: activity.name,
+        bookings: activity.bookings,
+        revenue: activity.revenue,
+      }));
+    }
     return activities
       .slice(0, 5)
       .map(activity => ({
@@ -152,12 +202,7 @@ export function ReportsPage() {
         revenue: (activity.price || 0) * Math.floor(30 + Math.random() * 150),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [activities]);
-
-  const totalRevenue = revenueData.reduce((sum, item) => sum + item.revenue, 0);
-  const totalBookings = revenueData.reduce((sum, item) => sum + item.bookings, 0);
-  const avgDailyRevenue = Math.floor(totalRevenue / revenueData.length);
-  const avgBookingValue = totalBookings > 0 ? Math.floor(totalRevenue / totalBookings) : 0;
+  }, [topItems, activities]);
 
   const stats = [
     {
@@ -246,16 +291,19 @@ export function ReportsPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex gap-2"
+        className="flex gap-2 flex-wrap"
       >
         {(['7d', '30d', '90d', '1y'] as TimePeriod[]).map((p) => (
           <motion.button
             key={p}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setPeriod(p)}
+            onClick={() => {
+              setUseCustomDates(false);
+              setPeriod(p);
+            }}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              period === p
+              period === p && !useCustomDates
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
             }`}
@@ -266,6 +314,43 @@ export function ReportsPage() {
             {p === '1y' && 'Last Year'}
           </motion.button>
         ))}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="grid grid-cols-1 lg:grid-cols-3 gap-4"
+      >
+        <label className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
+          <input
+            type="checkbox"
+            checked={useCustomDates}
+            onChange={(e) => setUseCustomDates(e.target.checked)}
+            className="h-4 w-4 text-blue-600 rounded"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Use custom date range</span>
+        </label>
+        <div className="space-y-2">
+          <label className="text-sm text-gray-700 dark:text-gray-300">From</label>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            disabled={!useCustomDates}
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm text-gray-700 dark:text-gray-300">To</label>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            disabled={!useCustomDates}
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+        </div>
       </motion.div>
 
       {/* Stats Grid */}

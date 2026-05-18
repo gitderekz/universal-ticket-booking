@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useCurrency } from '../../../contexts/CurrencyContext';
-import { getRoutes } from '../../../services/managementService';
+import { getRoutes, createRoute, updateRoute, deleteRoute, RouteItem } from '../../../services/managementService';
 import { getTransports } from '../../../services/adminService';
 import { Plus, MapPin, Edit, Trash2, Search, AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { useSystemLogs } from '../../../contexts/SystemLogsContext';
@@ -86,7 +86,7 @@ export const RoutesManagement = () => {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.transportId) newErrors.transportId = 'Transport is required';
@@ -99,62 +99,95 @@ export const RoutesManagement = () => {
       return;
     }
 
-    if (editingRoute) {
-      setRoutes(prev => prev.map(r =>
-        r.id === editingRoute.id
-          ? { ...r, ...formData }
-          : r
-      ));
-
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Updated route: ${formData.startLocation} → ${formData.endLocation}`,
-        module: 'routes',
-        status: 'success',
-        details: `Price: ${formatPrice(formData.price)}, Stations: ${formData.stations.length}`,
-      });
-
-      toast.success('Route updated successfully');
-    } else {
-      const newRoute: Route = {
-        id: `route${Date.now()}`,
-        ...formData,
-        parentRouteId: formData.parentRouteId || undefined,
-      };
-
-      setRoutes(prev => [...prev, newRoute]);
-
-      addLog({
-        userId: user?.id || '',
-        userName: user?.fullName || '',
-        action: `Created route: ${formData.startLocation} → ${formData.endLocation}`,
-        module: 'routes',
-        status: 'success',
-        details: `Price: ${formatPrice(formData.price)}, Stations: ${formData.stations.length}`,
-      });
-
-      toast.success('Route created successfully');
+    const transport = transports.find(t => t.id === formData.transportId);
+    if (!transport) {
+      toast.error('Selected transport is unavailable');
+      return;
     }
 
-    setShowModal(false);
-    setEditingRoute(null);
+    try {
+      if (editingRoute) {
+        const updated = await updateRoute(editingRoute.id, {
+          transport_id: formData.transportId,
+          company_id: transport.company_id || transport.Company?.id,
+          name: `${formData.startLocation} → ${formData.endLocation}`,
+          description: editingRoute.description || '',
+          origin_station_name: formData.startLocation,
+          destination_station_name: formData.endLocation,
+          base_price: formData.price,
+          parent_route_id: formData.parentRouteId || undefined,
+          stations: formData.stations
+        });
+
+        setRoutes(prev => prev.map(r => r.id === updated.id ? updated : r));
+
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Updated route: ${formData.startLocation} → ${formData.endLocation}`,
+          module: 'routes',
+          status: 'success',
+          details: `Price: ${formatPrice(formData.price)}, Stations: ${formData.stations.length}`,
+        });
+
+        toast.success('Route updated successfully');
+      } else {
+        const created = await createRoute({
+          transport_id: formData.transportId,
+          company_id: transport.company_id || transport.Company?.id,
+          name: `${formData.startLocation} → ${formData.endLocation}`,
+          description: `${formData.startLocation} to ${formData.endLocation}`,
+          origin_station_name: formData.startLocation,
+          destination_station_name: formData.endLocation,
+          base_price: formData.price,
+          distance_km: 0,
+          status: 'active',
+          parent_route_id: formData.parentRouteId || undefined,
+          stations: formData.stations
+        });
+
+        setRoutes(prev => [created, ...prev]);
+
+        addLog({
+          userId: user?.id || '',
+          userName: user?.fullName || '',
+          action: `Created route: ${formData.startLocation} → ${formData.endLocation}`,
+          module: 'routes',
+          status: 'success',
+          details: `Price: ${formatPrice(formData.price)}, Stations: ${formData.stations.length}`,
+        });
+
+        toast.success('Route created successfully');
+      }
+
+      setShowModal(false);
+      setEditingRoute(null);
+    } catch (error) {
+      console.error('Error saving route:', error);
+      toast.error('Unable to save route');
+    }
   };
 
-  const handleDelete = (route: Route) => {
-    setRoutes(prev => prev.filter(r => r.id !== route.id));
+  const handleDelete = async (route: RouteItem) => {
+    try {
+      await deleteRoute(route.id);
+      setRoutes(prev => prev.filter(r => r.id !== route.id));
 
-    addLog({
-      userId: user?.id || '',
-      userName: user?.fullName || '',
-      action: `Deleted route: ${route.startLocation} → ${route.endLocation}`,
-      module: 'routes',
-      status: 'warning',
-      details: `Price: ${formatPrice(route.price)}`,
-    });
+      addLog({
+        userId: user?.id || '',
+        userName: user?.fullName || '',
+        action: `Deleted route: ${route.name || `${route.startLocation} → ${route.endLocation}`}`,
+        module: 'routes',
+        status: 'warning',
+        details: `Price: ${formatPrice(route.base_price || route.price || 0)}`,
+      });
 
-    setDeleteConfirm(null);
-    toast.success('Route deleted successfully');
+      setDeleteConfirm(null);
+      toast.success('Route deleted successfully');
+    } catch (error) {
+      console.error('Error deleting route:', error);
+      toast.error('Unable to delete route');
+    }
   };
 
   const addStation = () => {

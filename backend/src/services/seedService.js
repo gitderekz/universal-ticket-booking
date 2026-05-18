@@ -22,6 +22,7 @@ const {
   Payment,
   Activity,
   ActivityInstance
+  , SystemLog
 } = require('../models');
 
 const slugify = (text) => {
@@ -54,9 +55,10 @@ const seedDatabase = async () => {
   const companies = await seedCompanies();
   const users = await seedUsers(roles, currency);
   const transports = await seedTransports(companies);
-  const stations = await seedStations(companies[0]);
+  // Use deterministic hardcoded station and route-station seeds (derived from frontend mock data)
+  const stations = await seedStationsHardcoded(companies[0]);
   const routes = await seedRoutes(transports, stations);
-  await seedRouteStations(routes, stations);
+  await seedRouteStationsHardcoded(routes, stations);
   await seedSeatLayouts(transports);
   const timetables = await seedTimetables(routes);
   await seedJourneys(timetables);
@@ -64,6 +66,8 @@ const seedDatabase = async () => {
   await seedFacilitySeatLayouts(facilities);
   const activities = await seedActivities(facilities);
   await seedActivityInstances(activities);
+  // Seed system logs (hardcoded derived entries)
+  await seedSystemLogsHardcoded(users, companies);
   await seedBookings(users.customers, routes, activities, currency);
 
   console.log('🎉 Database seeding completed successfully!');
@@ -894,7 +898,80 @@ const seedTransports = async (companies) => {
   return seededTransports;
 };
 
-const seedStations = async (company) => {
+const fs = require('fs');
+const vm = require('vm');
+
+// Create stations by parsing frontend mockRoutes in figma-frontend/src/data/mockData.ts
+const seedStationsFromMock = async (company) => {
+  const filePath = './figma-frontend/src/data/mockData.ts';
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    console.warn('Could not read mockData.ts, falling back to default stations seed');
+    return seedStationsFallback(company);
+  }
+
+  const match = content.match(/export const mockRoutes[\s\S]*?=\s*(\[[\s\S]*?\]);/m);
+  if (!match) return seedStationsFallback(company);
+
+  const arrayText = match[1];
+
+  // Safely evaluate the array literal in a VM context
+  let mockRoutes = [];
+  try {
+    const script = new vm.Script('(' + arrayText + ')');
+    mockRoutes = script.runInNewContext();
+  } catch (err) {
+    console.warn('Failed to parse mockRoutes from mockData.ts:', err.message);
+    return seedStationsFallback(company);
+  }
+
+  // collect unique station names
+  const stationMap = new Map();
+  for (const r of mockRoutes) {
+    if (!r || !Array.isArray(r.stations)) continue;
+    for (const s of r.stations) {
+      const name = (s.name || '').trim();
+      if (!name) continue;
+      if (!stationMap.has(name)) stationMap.set(name, { name, price: s.price || 0, isBreakStop: !!s.isBreakStop });
+    }
+  }
+
+  const seededStations = [];
+  let counter = 1;
+  for (const [name, info] of stationMap.entries()) {
+    // generate a short unique code
+    const base = slugify(name).replace(/-/g, '').slice(0, 6).toUpperCase() || ('S' + counter);
+    let code = base.slice(0, 3).toUpperCase();
+    let suffix = 1;
+    // ensure uniqueness
+    while (await Station.findOne({ where: { code } })) {
+      code = (base + String(suffix)).slice(0, 6).toUpperCase();
+      suffix += 1;
+    }
+
+    const [record] = await Station.findOrCreate({
+      where: { name },
+      defaults: {
+        company_id: company.id,
+        name,
+        code,
+        city: null,
+        country: null,
+        type: info.isBreakStop ? 'intermediate' : 'intermediate',
+        address: null
+      }
+    });
+    seededStations.push(record);
+    counter += 1;
+  }
+
+  return seededStations;
+};
+
+const seedStationsFallback = async (company) => {
+  // original small static seed as fallback
   const stationDefinitions = [
     { name: 'Dar es Salaam', code: 'DSM', city: 'Dar es Salaam', country: 'Tanzania', type: 'origin', address: 'Dar es Salaam Station' },
     { name: 'Morogoro', code: 'MGO', city: 'Morogoro', country: 'Tanzania', type: 'intermediate', address: 'Morogoro Stop' },
@@ -924,6 +1001,157 @@ const seedStations = async (company) => {
   }
 
   return seededStations;
+};
+
+// Hardcoded station definitions derived from frontend mockRoutes (deterministic)
+const seedStationsHardcoded = async (company) => {
+  const stationDefinitions = [
+    { name: 'Dar es Salaam', code: 'DSM', city: 'Dar es Salaam', country: 'Tanzania', type: 'origin', address: 'Dar es Salaam Station' },
+    { name: 'Morogoro', code: 'MGO', city: 'Morogoro', country: 'Tanzania', type: 'intermediate', address: 'Morogoro Stop' },
+    { name: 'Dodoma', code: 'DDM', city: 'Dodoma', country: 'Tanzania', type: 'intermediate', address: 'Dodoma Terminal' },
+    { name: 'Iringa', code: 'IRG', city: 'Iringa', country: 'Tanzania', type: 'intermediate', address: 'Iringa Terminal' },
+    { name: 'Mbeya', code: 'MBY', city: 'Mbeya', country: 'Tanzania', type: 'destination', address: 'Mbeya Station' },
+    { name: 'Arusha', code: 'ARU', city: 'Arusha', country: 'Tanzania', type: 'destination', address: 'Arusha Terminal' },
+    { name: 'Zanzibar', code: 'ZNZ', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Stone Town Port' },
+    { name: 'Pemba', code: 'PMB', city: 'Pemba', country: 'Tanzania', type: 'destination', address: 'Pemba Port' },
+    { name: 'Mwanza', code: 'MWZ', city: 'Mwanza', country: 'Tanzania', type: 'destination', address: 'Mwanza Terminal' },
+    { name: 'Bagamoyo', code: 'BGM', city: 'Bagamoyo', country: 'Tanzania', type: 'intermediate', address: 'Bagamoyo Stop' },
+    { name: 'Kigoma', code: 'KIG', city: 'Kigoma', country: 'Tanzania', type: 'destination', address: 'Kigoma Station' },
+    { name: 'Mombasa', code: 'MBSA', city: 'Mombasa', country: 'Kenya', type: 'destination', address: 'Mombasa Terminal' },
+    { name: 'Kilimanjaro', code: 'KIA', city: 'Moshi', country: 'Tanzania', type: 'destination', address: 'Kilimanjaro Airport' },
+    { name: 'Prison Island', code: 'PRN', city: 'Zanzibar', country: 'Tanzania', type: 'intermediate', address: 'Prison Island Dock' },
+    { name: 'Bukoba', code: 'BUK', city: 'Bukoba', country: 'Tanzania', type: 'destination', address: 'Bukoba Port' }
+  ];
+
+  const seededStations = [];
+  for (const s of stationDefinitions) {
+    const [record] = await Station.findOrCreate({
+      where: { code: s.code },
+      defaults: {
+        company_id: company.id,
+        name: s.name,
+        code: s.code,
+        city: s.city,
+        country: s.country,
+        type: s.type,
+        address: s.address
+      }
+    });
+    seededStations.push(record);
+  }
+
+  return seededStations;
+};
+
+// Hardcoded route-station mappings to match seeded routes (sequence + cumulative price)
+const seedRouteStationsHardcoded = async (routes, stations) => {
+  const mappings = [
+    // Map for 'Dar es Salaam to Mwanza' (uses DSM -> MGO -> DDM -> MWZ)
+    {
+      route_name: 'Dar es Salaam to Mwanza',
+      stations: [
+        { code: 'DSM', seq: 1, price: 0 },
+        { code: 'MGO', seq: 2, price: 15000 },
+        { code: 'DDM', seq: 3, price: 30000 },
+        { code: 'MWZ', seq: 4, price: 60000 }
+      ]
+    },
+    // Dar es Salaam to Bagamoyo
+    {
+      route_name: 'Dar es Salaam to Bagamoyo',
+      stations: [
+        { code: 'DSM', seq: 1, price: 0 },
+        { code: 'BGM', seq: 2, price: 15000 }
+      ]
+    },
+    // Arusha to Dar es Salaam
+    {
+      route_name: 'Arusha to Dar es Salaam',
+      stations: [
+        { code: 'ARU', seq: 1, price: 0 },
+        { code: 'DSM', seq: 2, price: 50000 }
+      ]
+    },
+    // Dodoma to Mbeya
+    {
+      route_name: 'Dodoma to Mbeya',
+      stations: [
+        { code: 'DDM', seq: 1, price: 0 },
+        { code: 'IRG', seq: 2, price: 20000 },
+        { code: 'MBY', seq: 3, price: 40000 }
+      ]
+    },
+    // Dar es Salaam to Zanzibar (ferry)
+    {
+      route_name: 'Dar es Salaam to Zanzibar',
+      stations: [
+        { code: 'DSM', seq: 1, price: 0 },
+        { code: 'ZNZ', seq: 2, price: 35000 }
+      ]
+    },
+    // Dar es Salaam to Pemba
+    {
+      route_name: 'Dar es Salaam to Pemba',
+      stations: [
+        { code: 'DSM', seq: 1, price: 0 },
+        { code: 'PMB', seq: 2, price: 50000 }
+      ]
+    },
+    // Mwanza to Bukoba (ship)
+    {
+      route_name: 'Mwanza to Bukoba',
+      stations: [
+        { code: 'MWZ', seq: 1, price: 0 },
+        { code: 'BUK', seq: 2, price: 30000 }
+      ]
+    },
+    // Zanzibar to Prison Island
+    {
+      route_name: 'Zanzibar to Prison Island',
+      stations: [
+        { code: 'ZNZ', seq: 1, price: 0 },
+        { code: 'PRN', seq: 2, price: 25000 }
+      ]
+    }
+  ];
+
+  for (const m of mappings) {
+    const route = routes.find((r) => r.name === m.route_name);
+    if (!route) continue;
+    for (const s of m.stations) {
+      const station = stations.find((st) => st.code === s.code);
+      if (!station) continue;
+      await RouteStation.findOrCreate({
+        where: { route_id: route.id, station_id: station.id },
+        defaults: {
+          route_id: route.id,
+          station_id: station.id,
+          sequence_order: s.seq,
+          cumulative_price: s.price,
+          is_break_stop: false,
+          distance_from_origin: (s.seq - 1) * 50
+        }
+      });
+    }
+  }
+};
+
+// Hardcoded system logs derived from expected mockSystemLogs
+const seedSystemLogsHardcoded = async (usersObj, companies) => {
+  const admin = usersObj.system && usersObj.system[1];
+  const now = new Date();
+  const logs = [
+    { user_id: admin ? admin.id : null, action: 'seed', message: 'Initial database seeded', ip_address: '127.0.0.1', mac_address: '00:00:5e:00:53:af', created_at: now },
+    { user_id: admin ? admin.id : null, action: 'login', message: 'Super admin initial login', ip_address: '127.0.0.1', mac_address: '00:00:5e:00:53:af', created_at: new Date(now.getTime() - 1000 * 60 * 60) },
+    { user_id: admin ? admin.id : null, action: 'company_create', message: 'Sample companies seeded', ip_address: '127.0.0.1', mac_address: '00:00:5e:00:53:b0', created_at: new Date(now.getTime() - 2000 * 60 * 60) }
+  ];
+
+  for (const l of logs) {
+    await SystemLog.findOrCreate({
+      where: { message: l.message, created_at: l.created_at },
+      defaults: l
+    });
+  }
 };
 
 const seedRoutes = async (transports, stations) => {
@@ -1124,57 +1352,47 @@ const seedRoutes = async (transports, stations) => {
   return seededRoutes;
 };
 
-const seedRouteStations = async (routes, stations) => {
-  const routeStops = [
-    {
-      route_name: 'Dar to Arusha Express',
-      stops: [
-        { code: 'DSM', cumulative_price: 0, order: 1, is_break_stop: false },
-        { code: 'MGO', cumulative_price: 20000, order: 2, is_break_stop: false },
-        { code: 'DDM', cumulative_price: 40000, order: 3, is_break_stop: true },
-        { code: 'ARU', cumulative_price: 60000, order: 4, is_break_stop: false }
-      ]
-    },
-    {
-      route_name: 'Arusha to Dar Return',
-      stops: [
-        { code: 'ARU', cumulative_price: 0, order: 1, is_break_stop: false },
-        { code: 'DDM', cumulative_price: 20000, order: 2, is_break_stop: true },
-        { code: 'MGO', cumulative_price: 40000, order: 3, is_break_stop: false },
-        { code: 'DSM', cumulative_price: 55000, order: 4, is_break_stop: false }
-      ]
-    },
-    {
-      route_name: 'Dar to Morogoro Shuttle',
-      stops: [
-        { code: 'DSM', cumulative_price: 0, order: 1, is_break_stop: false },
-        { code: 'MGO', cumulative_price: 15000, order: 2, is_break_stop: false }
-      ]
-    },
-    {
-      route_name: 'Zanzibar to Pemba Ferry',
-      stops: [
-        { code: 'ZNZ', cumulative_price: 0, order: 1, is_break_stop: false },
-        { code: 'PMB', cumulative_price: 35000, order: 2, is_break_stop: false }
-      ]
-    }
-  ];
+const seedRouteStationsFromMock = async (routes, stations) => {
+  // Try to parse mockRoutes from frontend and create route station mappings
+  const filePath = './figma-frontend/src/data/mockData.ts';
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    console.warn('Could not read mockData.ts for route stations, skipping mock-derived route stations');
+    return;
+  }
 
-  for (const routeStop of routeStops) {
-    const route = routes.find((item) => item.name === routeStop.route_name);
+  const match = content.match(/export const mockRoutes[\s\S]*?=\s*(\[[\s\S]*?\]);/m);
+  if (!match) return;
+
+  let mockRoutes = [];
+  try {
+    const script = new vm.Script('(' + match[1] + ')');
+    mockRoutes = script.runInNewContext();
+  } catch (err) {
+    console.warn('Failed to parse mockRoutes for route stations:', err.message);
+    return;
+  }
+
+  for (const r of mockRoutes) {
+    if (!r) continue;
+    const routeName = `${r.startLocation} to ${r.endLocation}`;
+    const route = routes.find((item) => item.name === routeName);
     if (!route) continue;
-    for (const stop of routeStop.stops) {
-      const station = stations.find((s) => s.code === stop.code);
+    if (!Array.isArray(r.stations)) continue;
+    for (const s of r.stations) {
+      const station = await Station.findOne({ where: { name: s.name } });
       if (!station) continue;
       await RouteStation.findOrCreate({
         where: { route_id: route.id, station_id: station.id },
         defaults: {
           route_id: route.id,
           station_id: station.id,
-          sequence_order: stop.order,
-          cumulative_price: stop.cumulative_price,
-          is_break_stop: stop.is_break_stop,
-          distance_from_origin: stop.order * 50
+          sequence_order: s.order || 0,
+          cumulative_price: s.price || 0,
+          is_break_stop: !!s.isBreakStop,
+          distance_from_origin: (s.order || 0) * 50
         }
       });
     }

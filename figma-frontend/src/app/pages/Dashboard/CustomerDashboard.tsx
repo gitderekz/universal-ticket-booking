@@ -95,8 +95,20 @@ export const CustomerDashboard = () => {
   const totalBookings = bookings.length;
   const activeBookings = bookings.filter(b => ['pending', 'holding', 'confirmed'].includes(String(b.status || '').toLowerCase())).length;
   const completedBookings = bookings.filter(b => ['confirmed', 'completed'].includes(String(b.status || '').toLowerCase())).length;
-  const totalSpent = bookings.filter(b => String(b.payment_status || b.paymentStatus || '').toLowerCase() === 'paid')
-    .reduce((s, b) => s + Number(b.total_price || b.amount || b.price || 0), 0);
+  const totalSpent = bookings.reduce((sum, b) => {
+    const paid = String(b.payment_status || b.paymentStatus || '').toLowerCase() === 'paid';
+    let bookingPaidAmount = 0;
+
+    if (Array.isArray(b.Payments) && b.Payments.length) {
+      bookingPaidAmount = b.Payments.reduce((ps: number, p: any) => ps + Number(p.amount || p.paid_amount || 0), 0);
+    }
+
+    if (!bookingPaidAmount) {
+      bookingPaidAmount = Number(b.total_amount || b.total_price || b.amount || b.price || 0);
+    }
+
+    return sum + (paid ? bookingPaidAmount : 0);
+  }, 0);
 
   const stats = [
     { icon: <Ticket className="w-6 h-6" />, label: t('dashboard.totalBookings'), value: String(totalBookings), color: 'bg-blue-500' },
