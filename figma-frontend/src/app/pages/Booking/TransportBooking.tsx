@@ -8,6 +8,7 @@ import { getRoutes, getTimetables } from '../../../services/managementService';
 import { journeyService } from '../../../services/journeyService';
 import { bookingService, seatHoldService } from '../../../services/bookingService';
 import apiClient from '../../../services/apiClient';
+import { getJourneySegments, calculateSegmentPrice, hasSegmentConflict } from '../../../utils/routeSegments';
 import { ArrowRight, ArrowLeft, Bus, Calendar, MapPin, Clock, Users } from 'lucide-react';
 
 const frontPositions: Record<'transport' | 'facility' | 'events', 'top' | 'left' | 'right'> = {
@@ -40,6 +41,7 @@ export const TransportBooking: React.FC = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [bookedSeats, setBookedSeats] = useState<string[]>([]);
   const [heldSeats, setHeldSeats] = useState<string[]>([]);
+  const [blockedSeats, setBlockedSeats] = useState<string[]>([]);
   const [passengerDetails, setPassengerDetails] = useState({
     fullName: '',
     email: '',
@@ -128,32 +130,62 @@ export const TransportBooking: React.FC = () => {
       if (!selectedTimetable) {
         setBookedSeats([]);
         setHeldSeats([]);
+        setBlockedSeats([]);
         return;
       }
 
       try {
         const availability = await journeyService.getAvailability(selectedTimetable);
-        const booked = availability?.seatMap?.filter((seat: any) => seat.status === 'booked').map((seat: any) => seat.code) || [];
-        const held = availability?.seatMap?.filter((seat: any) => seat.status === 'held').map((seat: any) => seat.code) || [];
+        const requestedSegments = route
+          ? getJourneySegments(route.RouteStations || routeStations, startStation, endStation)
+          : [];
+
+        const booked: string[] = [];
+        const held: string[] = [];
+        const blocked: Set<string> = new Set();
+
+        availability?.seatMap?.forEach((seat: any) => {
+          const holds = seat.holds || [];
+          const hasConflict = holds.some((hold: any) => {
+            const occupied = Array.isArray(hold.occupied_segments) ? hold.occupied_segments : [];
+            return requestedSegments.length > 0 && hasSegmentConflict(requestedSegments, occupied);
+          });
+
+          if (hasConflict) {
+            blocked.add(seat.code);
+            const conflictHolds = holds.filter((hold: any) => {
+              const occupied = Array.isArray(hold.occupied_segments) ? hold.occupied_segments : [];
+              return requestedSegments.length > 0 && hasSegmentConflict(requestedSegments, occupied);
+            });
+
+            if (conflictHolds.some((hold: any) => hold.status === 'confirmed')) {
+              booked.push(seat.code);
+            }
+            if (conflictHolds.some((hold: any) => hold.status === 'holding')) {
+              held.push(seat.code);
+            }
+          }
+        });
+
         setBookedSeats(booked);
         setHeldSeats(held);
+        setBlockedSeats(Array.from(blocked));
       } catch (error) {
         console.error('Error loading journey availability:', error);
         setBookedSeats([]);
         setHeldSeats([]);
+        setBlockedSeats([]);
       }
     };
     loadAvailability();
-  }, [selectedTimetable]);
+  }, [selectedTimetable, selectedRoute, startStation, endStation]);
 
   const calculatePrice = () => {
     if (!route) return 0;
-    const routeStations = (route.RouteStations?.map((rs: any) => rs.station || rs.Station).filter(Boolean) || route.stations || []);
-    const startIdx = routeStations.findIndex((s: any) => s.name === startStation);
-    const endIdx = routeStations.findIndex((s: any) => s.name === endStation);
-    const routePrice = route.base_price || route.price || 0;
-    if (startIdx === -1 || endIdx === -1) return routePrice;
-    return routePrice;
+    const routeStationsData = route.RouteStations?.sort((a: any, b: any) => a.sequence_order - b.sequence_order) || route.stations || routeStations;
+    const routePrice = Number(route.base_price || route.price || 0);
+    const price = calculateSegmentPrice(routePrice, routeStationsData, startStation, endStation);
+    return price;
   };
 
   const routeStationOptions = routeStations.length > 0
@@ -161,6 +193,20 @@ export const TransportBooking: React.FC = () => {
     : selectedRouteTitle
       ? [selectedRouteTitle.split(' → ')[0], selectedRouteTitle.split(' → ')[1]].filter(Boolean)
       : [];
+
+  const endStationOptions = (() => {
+    if (!routeStationOptions || routeStationOptions.length === 0) return [];
+    if (!startStation) return routeStationOptions;
+    const startIdx = routeStationOptions.findIndex((s: any) => s === startStation);
+    if (startIdx === -1) return routeStationOptions;
+    return routeStationOptions.slice(startIdx + 1);
+  })();
+
+  
+
+  const requestedSegments = route
+    ? getJourneySegments(route.RouteStations || routeStations, startStation, endStation)
+    : [];
 
   const totalPrice = calculatePrice() * selectedSeats.length;
 
@@ -171,7 +217,8 @@ export const TransportBooking: React.FC = () => {
       selectedRoute &&
       startStation &&
       endStation &&
-      startStation !== endStation
+      startStation !== endStation &&
+      getJourneySegments(route?.RouteStations || routeStations, startStation, endStation).length > 0
     ) {
       setCurrentStep('datetime');
     } else if (currentStep === 'datetime' && selectedTimetable) setCurrentStep('seats');
@@ -252,7 +299,7 @@ export const TransportBooking: React.FC = () => {
               ];
               const startLoc = route.startLocation || route.originStation?.name || 'Unknown';
               const endLoc = route.endLocation || route.destinationStation?.name || 'Unknown';
-              const routePrice = route.base_price || route.price || 0;
+              const routePrice = Number(route.base_price || route.price || 0);
               const routeStationNames = (route.RouteStations?.map((rs: any) => rs.station?.name || rs.Station?.name || rs.station || rs.Station || rs.name || '').filter(Boolean) || route.stations?.map((s: any) => (typeof s === 'string' ? s : s.name || '')).filter(Boolean) || []);
               return (
               <button
@@ -336,9 +383,16 @@ export const TransportBooking: React.FC = () => {
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
                       <option value="">Choose an end station</option>
-                      {routeStationOptions.map((station) => (
-                        <option key={station} value={station}>{station}</option>
-                      ))}
+                      {routeStationOptions.map((station) => {
+                        if (!startStation) return (
+                          <option key={station} value={station}>{station}</option>
+                        );
+                        const startIdx = routeStationOptions.indexOf(startStation);
+                        const stationIdx = routeStationOptions.indexOf(station);
+                        return stationIdx > startIdx ? (
+                          <option key={station} value={station}>{station}</option>
+                        ) : null;
+                      })}
                     </select>
                   </div>
                 </div>
@@ -347,6 +401,9 @@ export const TransportBooking: React.FC = () => {
               )}
               {selectedRoute && startStation && endStation && startStation === endStation && (
                 <p className="mt-3 text-sm text-red-600 dark:text-red-400">Start and end stations cannot be the same. Please choose different stations.</p>
+              )}
+              {selectedRoute && startStation && endStation && startStation !== endStation && getJourneySegments(route?.RouteStations || routeStations, startStation, endStation).length === 0 && (
+                <p className="mt-3 text-sm text-red-600 dark:text-red-400">This station combination is not valid for the chosen route. Please choose a valid journey direction.</p>
               )}
             </div>
           )}
@@ -399,6 +456,7 @@ export const TransportBooking: React.FC = () => {
             onSeatsChange={setSelectedSeats}
             occupiedSeats={bookedSeats}
             heldSeats={heldSeats}
+            blockedSeats={blockedSeats}
             frontPosition={frontPositions.transport}
             typeSlug={transportType}
           />
@@ -469,7 +527,7 @@ export const TransportBooking: React.FC = () => {
           onClick={handleNext}
           disabled={
             (currentStep === 'transport' && !selectedTransport) ||
-            (currentStep === 'route' && (!selectedRoute || !startStation || !endStation || startStation === endStation)) ||
+            (currentStep === 'route' && (!selectedRoute || !startStation || !endStation || startStation === endStation || getJourneySegments(route?.RouteStations || routeStations, startStation, endStation).length === 0)) ||
             (currentStep === 'datetime' && !selectedTimetable) ||
             (currentStep === 'seats' && selectedSeats.length === 0)
           }
@@ -486,15 +544,23 @@ export const TransportBooking: React.FC = () => {
           onClose={() => setShowPayment(false)}
           onSubmit={async (paymentPayload) => {
             try {
-              // First hold the seats
-              await seatHoldService.holdSeats(selectedTimetable, selectedSeats);
-              
+              // Compute requested segments
+              const requestedSegments = route
+                ? getJourneySegments(route.RouteStations || routeStations, startStation, endStation)
+                : [];
+
               // Create booking items for each seat
               const bookingItems = selectedSeats.map(seatCode => ({
                 passenger_name: passengerDetails.fullName,
                 passenger_type: 'adult',
                 unit_price: calculatePrice(),
-                seat_code: seatCode
+                seat_code: seatCode,
+                details: {
+                  start_station: startStation,
+                  end_station: endStation,
+                  occupied_segments: requestedSegments,
+                  traveled_segment_count: requestedSegments.length
+                }
               }));
               
               // Create the booking
@@ -502,6 +568,10 @@ export const TransportBooking: React.FC = () => {
                 journey_id: selectedTimetable,
                 seat_codes: selectedSeats,
                 booking_type: 'transport',
+                start_station: startStation,
+                end_station: endStation,
+                occupied_segments: requestedSegments,
+                traveled_segment_count: requestedSegments.length,
                 items: bookingItems,
                 total_amount: totalPrice,
                 passenger_count: selectedSeats.length,

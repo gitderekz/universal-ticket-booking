@@ -59,8 +59,11 @@ export const TicketsPage: React.FC = () => {
           const destinationStation = route?.destinationStation;
           const seatHolds = b.SeatHolds || [];
           const seatItems = b.BookingItems || [];
+          const firstItem = seatItems[0] || {};
           const payment = b.Payments?.[0]; // Get first payment if exists
 
+          const bookingStartStation = firstItem.details?.start_station || originStation?.name || '';
+          const bookingEndStation = firstItem.details?.end_station || destinationStation?.name || '';
           const isFacilityBooking = b.booking_type === 'facility' || Boolean(activityInstance);
           const bookingTitle = isFacilityBooking
             ? activity?.name || facility?.name || `Booking ${b.id}`
@@ -92,8 +95,8 @@ export const TicketsPage: React.FC = () => {
             passengerName: b.contact_name || user?.fullName || 'John Doe',
             passengerPhone: b.contact_phone || user?.phone || '',
             passengerEmail: b.contact_email || user?.email || '',
-            from: isFacilityBooking ? facility?.name || '' : originStation?.name || '',
-            to: isFacilityBooking ? activity?.name || '' : destinationStation?.name || '',
+            from: isFacilityBooking ? facility?.name || '' : bookingStartStation,
+            to: isFacilityBooking ? activity?.name || '' : bookingEndStation,
             transportRegistration: transport?.registration_number || '',
             paymentMethod: payment?.method || 'M-Pesa'
           };

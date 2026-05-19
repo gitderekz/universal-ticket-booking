@@ -39,6 +39,23 @@ module.exports = (sequelize) => {
         key: 'id'
       }
     },
+    start_station: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    end_station: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    occupied_segments: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: []
+    },
+    traveled_segment_count: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     session_id: {
       type: DataTypes.STRING(255),
       allowNull: true

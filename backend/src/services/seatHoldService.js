@@ -1,5 +1,10 @@
-const { SeatHold, Journey, ActivityInstance, Seat, SeatLayout } = require('../models');
+const { SeatHold, Journey, ActivityInstance, Seat, SeatLayout, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const {
+  getRouteSegments,
+  getJourneySegments,
+  hasSegmentConflict
+} = require('../utils/routeSegments');
 
 const HOLD_DURATION_MINUTES = 10;
 
@@ -14,49 +19,84 @@ const buildWhereClause = ({ journeyId, activityInstanceId, seatCodes, userId, st
   return where;
 };
 
-const holdSeats = async ({ journeyId = null, activityInstanceId = null }, seatCodes, userId, sessionId) => {
+const holdSeats = async ({ journeyId = null, activityInstanceId = null, startStation = null, endStation = null }, seatCodes, userId, sessionId) => {
   if (!journeyId && !activityInstanceId) {
     throw new Error('Either journeyId or activityInstanceId is required to hold seats');
   }
 
   const expiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000);
   const holds = [];
+  let requestedSegments = [];
+  let routeStations = [];
 
-  for (const code of seatCodes) {
-    const existing = await SeatHold.findOne({
-      where: buildWhereClause({
-        journeyId,
-        activityInstanceId,
-        seatCodes: [code],
-        statusIn: ['holding', 'confirmed']
-      })
-    });
-
-    if (existing) {
-      if (existing.status === 'holding' && existing.user_id === userId) {
-        await existing.update({
-          held_at: new Date(),
-          expires_at: expiresAt,
-          status: 'holding'
-        });
-        holds.push(existing);
-        continue;
+  await sequelize.transaction(async (transaction) => {
+    if (journeyId) {
+      if (!startStation || !endStation) {
+        throw new Error('startStation and endStation are required for segment bookings');
       }
-      throw new Error(`Seat ${code} is already unavailable`);
+
+      const journey = await Journey.findByPk(journeyId, { transaction });
+      if (!journey) {
+        throw new Error('Journey not found');
+      }
+
+      const models = require('../models');
+      const route = await models.Route.findByPk(journey.route_id, {
+        include: [{
+          model: models.RouteStation,
+          include: [{ model: models.Station }]
+        }],
+        transaction
+      });
+
+      if (!route) {
+        throw new Error('Route for journey not found');
+      }
+
+      routeStations = (route.RouteStations || []).sort((a, b) => a.sequence_order - b.sequence_order);
+      requestedSegments = getJourneySegments(routeStations, startStation, endStation);
+
+      if (!requestedSegments.length) {
+        throw new Error('Invalid segment selection for the chosen route');
+      }
     }
 
-    const hold = await SeatHold.create({
-      journey_id: journeyId,
-      activity_instance_id: activityInstanceId,
-      seat_code: code,
-      user_id: userId,
-      session_id: sessionId,
-      held_at: new Date(),
-      expires_at: expiresAt,
-      status: 'holding'
-    });
-    holds.push(hold);
-  }
+    for (const code of seatCodes) {
+      const existingHolds = await SeatHold.findAll({
+        where: buildWhereClause({
+          journeyId,
+          activityInstanceId,
+          seatCodes: [code],
+          statusIn: ['holding', 'confirmed']
+        }),
+        transaction,
+        lock: transaction.LOCK.UPDATE
+      });
+
+      for (const existing of existingHolds) {
+        const existingSegments = Array.isArray(existing.occupied_segments) ? existing.occupied_segments : [];
+        if (hasSegmentConflict(requestedSegments, existingSegments)) {
+          throw new Error(`Seat ${code} is already reserved for the selected journey segment`);
+        }
+      }
+
+      const hold = await SeatHold.create({
+        journey_id: journeyId,
+        activity_instance_id: activityInstanceId,
+        seat_code: code,
+        user_id: userId,
+        session_id: sessionId,
+        start_station: startStation,
+        end_station: endStation,
+        occupied_segments: requestedSegments,
+        traveled_segment_count: requestedSegments.length,
+        held_at: new Date(),
+        expires_at: expiresAt,
+        status: 'holding'
+      }, { transaction });
+      holds.push(hold);
+    }
+  });
 
   return holds;
 };
@@ -182,11 +222,45 @@ const getAvailability = async ({ journeyId = null, activityInstanceId = null }) 
       activityInstanceId,
       statusIn: ['holding', 'confirmed']
     }),
-    attributes: ['seat_code', 'status']
+    attributes: ['seat_code', 'status', 'start_station', 'end_station', 'occupied_segments', 'traveled_segment_count']
   });
 
-  const heldSeats = holds.filter(h => h.status === 'holding').map(h => h.seat_code);
-  const bookedSeats = holds.filter(h => h.status === 'confirmed').map(h => h.seat_code);
+  const seatHoldMap = {};
+  holds.forEach((hold) => {
+    if (!seatHoldMap[hold.seat_code]) {
+      seatHoldMap[hold.seat_code] = {
+        code: hold.seat_code,
+        holds: [],
+        occupied_segments: [],
+        held_segments: [],
+        confirmed_segments: []
+      };
+    }
+
+    const entry = seatHoldMap[hold.seat_code];
+    const occupiedSegments = Array.isArray(hold.occupied_segments) ? hold.occupied_segments : [];
+    entry.holds.push({
+      status: hold.status,
+      start_station: hold.start_station,
+      end_station: hold.end_station,
+      occupied_segments: occupiedSegments,
+      traveled_segment_count: hold.traveled_segment_count
+    });
+
+    if (hold.status === 'confirmed') {
+      entry.confirmed_segments.push(...occupiedSegments);
+    }
+    if (hold.status === 'holding') {
+      entry.held_segments.push(...occupiedSegments);
+    }
+    entry.occupied_segments.push(...occupiedSegments);
+  });
+
+  Object.values(seatHoldMap).forEach((entry) => {
+    entry.occupied_segments = Array.from(new Set(entry.occupied_segments));
+    entry.held_segments = Array.from(new Set(entry.held_segments));
+    entry.confirmed_segments = Array.from(new Set(entry.confirmed_segments));
+  });
 
   const layout = transport?.seatLayout || facility?.seatLayout;
   let seats = layout?.Seats || [];
@@ -200,7 +274,7 @@ const getAvailability = async ({ journeyId = null, activityInstanceId = null }) 
 
   const capacity = transport?.capacity || facility?.capacity || (record.total_slots ?? 0);
   if ((!seats || seats.length === 0) && capacity) {
-    const knownCodes = Array.from(new Set([...heldSeats, ...bookedSeats]));
+    const knownCodes = Array.from(new Set(Object.keys(seatHoldMap)));
     const synthesized = [];
 
     for (const code of knownCodes) {
@@ -220,23 +294,43 @@ const getAvailability = async ({ journeyId = null, activityInstanceId = null }) 
     seats = synthesized.slice(0, capacity);
   }
 
+  const seatMap = seats.map((seat) => {
+    const seatHold = seatHoldMap[seat.code] || {
+      holds: [],
+      occupied_segments: [],
+      held_segments: [],
+      confirmed_segments: []
+    };
+
+    const status = seatHold.confirmed_segments.length > 0
+      ? 'booked'
+      : seatHold.held_segments.length > 0
+      ? 'held'
+      : 'available';
+
+    return {
+      code: seat.code,
+      type: seat.seat_type || 'standard',
+      status,
+      holds: seatHold.holds,
+      occupied_segments: seatHold.occupied_segments,
+      confirmed_segments: seatHold.confirmed_segments,
+      held_segments: seatHold.held_segments
+    };
+  });
+
   const totalSeats = seats.length;
+  const bookedSeats = seatMap.filter((seat) => seat.status === 'booked').length;
+  const heldSeats = seatMap.filter((seat) => seat.status === 'held').length;
+
   return {
     journeyId,
     activityInstanceId,
     totalSeats,
-    bookedSeats: bookedSeats.length,
-    heldSeats: heldSeats.length,
-    availableSeats: Math.max(0, totalSeats - bookedSeats.length - heldSeats.length),
-    seatMap: seats.map(seat => ({
-      code: seat.code,
-      type: seat.seat_type || 'standard',
-      status: bookedSeats.includes(seat.code)
-        ? 'booked'
-        : heldSeats.includes(seat.code)
-        ? 'held'
-        : 'available'
-    }))
+    bookedSeats,
+    heldSeats,
+    availableSeats: Math.max(0, totalSeats - bookedSeats - heldSeats),
+    seatMap
   };
 };
 

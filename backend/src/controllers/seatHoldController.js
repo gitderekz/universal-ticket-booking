@@ -2,14 +2,16 @@ const seatHoldService = require('../services/seatHoldService');
 
 const holdSeats = async (req, res, next) => {
   try {
-    const { journey_id, activity_instance_id, seat_codes } = req.body;
+    const { journey_id, activity_instance_id, seat_codes, start_station, end_station } = req.body;
     const userId = req.user.id;
     const sessionId = req.headers['x-socket-id'] || 'unknown';
 
     const holds = await seatHoldService.holdSeats(
       {
         journeyId: journey_id || null,
-        activityInstanceId: activity_instance_id || null
+        activityInstanceId: activity_instance_id || null,
+        startStation: start_station || null,
+        endStation: end_station || null
       },
       seat_codes,
       userId,

@@ -325,6 +325,7 @@ interface SeatSelectorProps {
   onSeatsChange: (seats: string[]) => void;
   occupiedSeats?: string[];
   heldSeats?: string[];
+  blockedSeats?: string[];
   frontPosition?: 'top' | 'left' | 'right';
   typeSlug?: string;
 }
@@ -550,6 +551,7 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
   onSeatsChange,
   occupiedSeats = [],
   heldSeats = [],
+  blockedSeats = [],
   frontPosition = 'top',
   typeSlug,
 }) => {
@@ -626,6 +628,7 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
       seat === 'A1' ||
       occupiedSeats.includes(seat) ||
       heldSeats.includes(seat) ||
+      blockedSeats.includes(seat) ||
       lockedSeats.has(seat) ||
       remoteHeldSeats.has(seat)
     )
@@ -648,6 +651,9 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
 
     if (occupiedSeats.includes(seat))
       return 'bg-gradient-to-br from-red-500 to-rose-600 text-white cursor-not-allowed opacity-90';
+
+    if (blockedSeats.includes(seat))
+      return 'bg-gradient-to-br from-gray-400 to-gray-500 text-white cursor-not-allowed opacity-90';
 
     if (
       heldSeats.includes(seat) ||
@@ -693,6 +699,10 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
               label: 'Held',
               color:
                 'from-orange-400 to-orange-500',
+            },
+            {
+              label: 'Blocked',
+              color: 'from-gray-400 to-gray-500'
             },
             {
               label: 'Driver/Pilot',
@@ -781,7 +791,8 @@ export const SeatSelector: React.FC<SeatSelectorProps> = ({
                       occupiedSeats.includes(seat) ||
                       seat === 'A1' ||
                       heldSeats.includes(seat) ||
-                      remoteHeldSeats.has(seat)
+                      remoteHeldSeats.has(seat) ||
+                      blockedSeats.includes(seat)
                     }
                     title={seat}
                     className={`

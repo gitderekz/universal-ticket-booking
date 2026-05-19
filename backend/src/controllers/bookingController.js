@@ -121,7 +121,9 @@ const createBooking = async (req, res, next) => {
     if (seat_codes.length > 0) {
       const holdTarget = {
         journeyId: journey_id || null,
-        activityInstanceId: activity_instance_id || null
+        activityInstanceId: activity_instance_id || null,
+        startStation: req.body.start_station || null,
+        endStation: req.body.end_station || null
       };
       const holds = await seatHoldService.holdSeats(holdTarget, seat_codes, userId, sessionId);
       if (!holds || holds.length === 0) {

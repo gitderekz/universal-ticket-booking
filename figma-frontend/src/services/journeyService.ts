@@ -18,7 +18,8 @@ export interface SeatAvailability {
   available_seats: number;
   booked_seats: number;
   held_seats: number;
-  seat_map: Record<string, string>;
+  seatMap?: any[];
+  seat_map?: Record<string, string>;
 }
 
 export const journeyService = {
