@@ -973,14 +973,48 @@ const seedStationsFromMock = async (company) => {
 const seedStationsFallback = async (company) => {
   // original small static seed as fallback
   const stationDefinitions = [
-    { name: 'Dar es Salaam', code: 'DSM', city: 'Dar es Salaam', country: 'Tanzania', type: 'origin', address: 'Dar es Salaam Station' },
-    { name: 'Morogoro', code: 'MGO', city: 'Morogoro', country: 'Tanzania', type: 'intermediate', address: 'Morogoro Stop' },
-    { name: 'Dodoma', code: 'DDM', city: 'Dodoma', country: 'Tanzania', type: 'intermediate', address: 'Dodoma Terminal' },
-    { name: 'Iringa', code: 'IRG', city: 'Iringa', country: 'Tanzania', type: 'intermediate', address: 'Iringa Terminal' },
-    { name: 'Mbeya', code: 'MBY', city: 'Mbeya', country: 'Tanzania', type: 'destination', address: 'Mbeya Station' },
-    { name: 'Arusha', code: 'ARU', city: 'Arusha', country: 'Tanzania', type: 'destination', address: 'Arusha Terminal' },
-    { name: 'Zanzibar', code: 'ZNZ', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Stone Town Port' },
-    { name: 'Pemba', code: 'PMB', city: 'Pemba', country: 'Tanzania', type: 'destination', address: 'Pemba Port' }
+    { code: 'DSM', name: 'Dar es Salaam', city: 'Dar es Salaam', country: 'Tanzania', type: 'terminal', address: 'Dar es Salaam Central Bus Terminal' },
+    { code: 'PGU', name: 'Pugu', city: 'Dar es Salaam', country: 'Tanzania', type: 'intermediate', address: 'Pugu Road Stop' },
+    { code: 'MOR', name: 'Morogoro', city: 'Morogoro', country: 'Tanzania', type: 'terminal', address: 'Morogoro Main Bus Terminal' },
+    { code: 'GAR', name: 'Gairo', city: 'Gairo', country: 'Tanzania', type: 'intermediate', address: 'Gairo Highway Stop' },
+    { code: 'DDM', name: 'Dodoma', city: 'Dodoma', country: 'Tanzania', type: 'terminal', address: 'Dodoma Central Terminal' },
+    { code: 'SGD', name: 'Singida', city: 'Singida', country: 'Tanzania', type: 'intermediate', address: 'Singida Transit Stop' },
+    { code: 'MWZ', name: 'Mwanza', city: 'Mwanza', country: 'Tanzania', type: 'destination', address: 'Mwanza Main Terminal' },
+
+    { code: 'ARU', name: 'Arusha', city: 'Arusha', country: 'Tanzania', type: 'origin', address: 'Arusha Central Bus Terminal' },
+    { code: 'MOS', name: 'Moshi', city: 'Moshi', country: 'Tanzania', type: 'terminal', address: 'Moshi Main Terminal' },
+    { code: 'SAM', name: 'Same', city: 'Same', country: 'Tanzania', type: 'intermediate', address: 'Same Highway Rest Stop' },
+    { code: 'KOR', name: 'Korogwe', city: 'Korogwe', country: 'Tanzania', type: 'intermediate', address: 'Korogwe Transit Stop' },
+
+    { code: 'NRB', name: 'Nairobi', city: 'Nairobi', country: 'Kenya', type: 'origin', address: 'Nairobi Coach Terminal' },
+    { code: 'NAM', name: 'Namanga', city: 'Namanga', country: 'Tanzania', type: 'intermediate', address: 'Namanga Border Station' },
+
+    { code: 'IRG', name: 'Iringa', city: 'Iringa', country: 'Tanzania', type: 'intermediate', address: 'Iringa Regional Terminal' },
+    { code: 'MBY', name: 'Mbeya', city: 'Mbeya', country: 'Tanzania', type: 'destination', address: 'Mbeya Main Bus Terminal' },
+
+    { code: 'TGT', name: 'Tegeta', city: 'Dar es Salaam', country: 'Tanzania', type: 'intermediate', address: 'Tegeta Bus Stop' },
+    { code: 'BGM', name: 'Bagamoyo', city: 'Bagamoyo', country: 'Tanzania', type: 'destination', address: 'Bagamoyo Transport Terminal' },
+
+    { code: 'NGO', name: 'Ngorongoro', city: 'Arusha', country: 'Tanzania', type: 'destination', address: 'Ngorongoro Conservation Area Gate' },
+    { code: 'SRG', name: 'Serengeti', city: 'Mara', country: 'Tanzania', type: 'destination', address: 'Serengeti National Park Entrance' },
+
+    { code: 'KIG', name: 'Kigoma', city: 'Kigoma', country: 'Tanzania', type: 'destination', address: 'Kigoma Railway Station' },
+    { code: 'TAB', name: 'Tabora', city: 'Tabora', country: 'Tanzania', type: 'intermediate', address: 'Tabora Railway Station' },
+
+    { code: 'ATH', name: 'Athi River', city: 'Machakos', country: 'Kenya', type: 'intermediate', address: 'Athi River SGR Station' },
+    { code: 'EML', name: 'Emali', city: 'Makueni', country: 'Kenya', type: 'intermediate', address: 'Emali SGR Stop' },
+    { code: 'VOI', name: 'Voi', city: 'Taita Taveta', country: 'Kenya', type: 'intermediate', address: 'Voi Railway Station' },
+    { code: 'MBA', name: 'Mombasa', city: 'Mombasa', country: 'Kenya', type: 'destination', address: 'Mombasa Terminus' },
+
+    { code: 'KIA', name: 'Kilimanjaro', city: 'Moshi', country: 'Tanzania', type: 'destination', address: 'Kilimanjaro International Airport' },
+
+    { code: 'ZNZ', name: 'Zanzibar', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Stone Town Ferry Terminal' },
+    { code: 'PMB', name: 'Pemba', city: 'Pemba', country: 'Tanzania', type: 'destination', address: 'Pemba Main Port' },
+
+    { code: 'GEI', name: 'Geita', city: 'Geita', country: 'Tanzania', type: 'intermediate', address: 'Geita Lake Stop' },
+    { code: 'BUK', name: 'Bukoba', city: 'Bukoba', country: 'Tanzania', type: 'destination', address: 'Bukoba Port Terminal' },
+
+    { code: 'PRI', name: 'Prison Island', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Prison Island Boat Dock' },
   ];
 
   const seededStations = [];
@@ -1006,21 +1040,48 @@ const seedStationsFallback = async (company) => {
 // Hardcoded station definitions derived from frontend mockRoutes (deterministic)
 const seedStationsHardcoded = async (company) => {
   const stationDefinitions = [
-    { name: 'Dar es Salaam', code: 'DSM', city: 'Dar es Salaam', country: 'Tanzania', type: 'origin', address: 'Dar es Salaam Station' },
-    { name: 'Morogoro', code: 'MGO', city: 'Morogoro', country: 'Tanzania', type: 'intermediate', address: 'Morogoro Stop' },
-    { name: 'Dodoma', code: 'DDM', city: 'Dodoma', country: 'Tanzania', type: 'intermediate', address: 'Dodoma Terminal' },
-    { name: 'Iringa', code: 'IRG', city: 'Iringa', country: 'Tanzania', type: 'intermediate', address: 'Iringa Terminal' },
-    { name: 'Mbeya', code: 'MBY', city: 'Mbeya', country: 'Tanzania', type: 'destination', address: 'Mbeya Station' },
-    { name: 'Arusha', code: 'ARU', city: 'Arusha', country: 'Tanzania', type: 'destination', address: 'Arusha Terminal' },
-    { name: 'Zanzibar', code: 'ZNZ', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Stone Town Port' },
-    { name: 'Pemba', code: 'PMB', city: 'Pemba', country: 'Tanzania', type: 'destination', address: 'Pemba Port' },
-    { name: 'Mwanza', code: 'MWZ', city: 'Mwanza', country: 'Tanzania', type: 'destination', address: 'Mwanza Terminal' },
-    { name: 'Bagamoyo', code: 'BGM', city: 'Bagamoyo', country: 'Tanzania', type: 'intermediate', address: 'Bagamoyo Stop' },
-    { name: 'Kigoma', code: 'KIG', city: 'Kigoma', country: 'Tanzania', type: 'destination', address: 'Kigoma Station' },
-    { name: 'Mombasa', code: 'MBSA', city: 'Mombasa', country: 'Kenya', type: 'destination', address: 'Mombasa Terminal' },
-    { name: 'Kilimanjaro', code: 'KIA', city: 'Moshi', country: 'Tanzania', type: 'destination', address: 'Kilimanjaro Airport' },
-    { name: 'Prison Island', code: 'PRN', city: 'Zanzibar', country: 'Tanzania', type: 'intermediate', address: 'Prison Island Dock' },
-    { name: 'Bukoba', code: 'BUK', city: 'Bukoba', country: 'Tanzania', type: 'destination', address: 'Bukoba Port' }
+    { code: 'DSM', name: 'Dar es Salaam', city: 'Dar es Salaam', country: 'Tanzania', type: 'terminal', address: 'Dar es Salaam Central Bus Terminal' },
+    { code: 'PGU', name: 'Pugu', city: 'Dar es Salaam', country: 'Tanzania', type: 'intermediate', address: 'Pugu Road Stop' },
+    { code: 'MOR', name: 'Morogoro', city: 'Morogoro', country: 'Tanzania', type: 'terminal', address: 'Morogoro Main Bus Terminal' },
+    { code: 'GAR', name: 'Gairo', city: 'Gairo', country: 'Tanzania', type: 'intermediate', address: 'Gairo Highway Stop' },
+    { code: 'DDM', name: 'Dodoma', city: 'Dodoma', country: 'Tanzania', type: 'terminal', address: 'Dodoma Central Terminal' },
+    { code: 'SGD', name: 'Singida', city: 'Singida', country: 'Tanzania', type: 'intermediate', address: 'Singida Transit Stop' },
+    { code: 'MWZ', name: 'Mwanza', city: 'Mwanza', country: 'Tanzania', type: 'destination', address: 'Mwanza Main Terminal' },
+
+    { code: 'ARU', name: 'Arusha', city: 'Arusha', country: 'Tanzania', type: 'origin', address: 'Arusha Central Bus Terminal' },
+    { code: 'MOS', name: 'Moshi', city: 'Moshi', country: 'Tanzania', type: 'terminal', address: 'Moshi Main Terminal' },
+    { code: 'SAM', name: 'Same', city: 'Same', country: 'Tanzania', type: 'intermediate', address: 'Same Highway Rest Stop' },
+    { code: 'KOR', name: 'Korogwe', city: 'Korogwe', country: 'Tanzania', type: 'intermediate', address: 'Korogwe Transit Stop' },
+
+    { code: 'NRB', name: 'Nairobi', city: 'Nairobi', country: 'Kenya', type: 'origin', address: 'Nairobi Coach Terminal' },
+    { code: 'NAM', name: 'Namanga', city: 'Namanga', country: 'Tanzania', type: 'intermediate', address: 'Namanga Border Station' },
+
+    { code: 'IRG', name: 'Iringa', city: 'Iringa', country: 'Tanzania', type: 'intermediate', address: 'Iringa Regional Terminal' },
+    { code: 'MBY', name: 'Mbeya', city: 'Mbeya', country: 'Tanzania', type: 'destination', address: 'Mbeya Main Bus Terminal' },
+
+    { code: 'TGT', name: 'Tegeta', city: 'Dar es Salaam', country: 'Tanzania', type: 'intermediate', address: 'Tegeta Bus Stop' },
+    { code: 'BGM', name: 'Bagamoyo', city: 'Bagamoyo', country: 'Tanzania', type: 'destination', address: 'Bagamoyo Transport Terminal' },
+
+    { code: 'NGO', name: 'Ngorongoro', city: 'Arusha', country: 'Tanzania', type: 'destination', address: 'Ngorongoro Conservation Area Gate' },
+    { code: 'SRG', name: 'Serengeti', city: 'Mara', country: 'Tanzania', type: 'destination', address: 'Serengeti National Park Entrance' },
+
+    { code: 'KIG', name: 'Kigoma', city: 'Kigoma', country: 'Tanzania', type: 'destination', address: 'Kigoma Railway Station' },
+    { code: 'TAB', name: 'Tabora', city: 'Tabora', country: 'Tanzania', type: 'intermediate', address: 'Tabora Railway Station' },
+
+    { code: 'ATH', name: 'Athi River', city: 'Machakos', country: 'Kenya', type: 'intermediate', address: 'Athi River SGR Station' },
+    { code: 'EML', name: 'Emali', city: 'Makueni', country: 'Kenya', type: 'intermediate', address: 'Emali SGR Stop' },
+    { code: 'VOI', name: 'Voi', city: 'Taita Taveta', country: 'Kenya', type: 'intermediate', address: 'Voi Railway Station' },
+    { code: 'MBA', name: 'Mombasa', city: 'Mombasa', country: 'Kenya', type: 'destination', address: 'Mombasa Terminus' },
+
+    { code: 'KIA', name: 'Kilimanjaro', city: 'Moshi', country: 'Tanzania', type: 'destination', address: 'Kilimanjaro International Airport' },
+
+    { code: 'ZNZ', name: 'Zanzibar', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Stone Town Ferry Terminal' },
+    { code: 'PMB', name: 'Pemba', city: 'Pemba', country: 'Tanzania', type: 'destination', address: 'Pemba Main Port' },
+
+    { code: 'GEI', name: 'Geita', city: 'Geita', country: 'Tanzania', type: 'intermediate', address: 'Geita Lake Stop' },
+    { code: 'BUK', name: 'Bukoba', city: 'Bukoba', country: 'Tanzania', type: 'destination', address: 'Bukoba Port Terminal' },
+
+    { code: 'PRI', name: 'Prison Island', city: 'Zanzibar', country: 'Tanzania', type: 'destination', address: 'Prison Island Boat Dock' },
   ];
 
   const seededStations = [];
@@ -1050,67 +1111,145 @@ const seedRouteStationsHardcoded = async (routes, stations) => {
     {
       route_name: 'Dar es Salaam to Mwanza',
       stations: [
-        { code: 'DSM', seq: 1, price: 0 },
-        { code: 'MGO', seq: 2, price: 15000 },
-        { code: 'DDM', seq: 3, price: 30000 },
-        { code: 'MWZ', seq: 4, price: 60000 }
-      ]
-    },
-    // Dar es Salaam to Bagamoyo
-    {
-      route_name: 'Dar es Salaam to Bagamoyo',
-      stations: [
-        { code: 'DSM', seq: 1, price: 0 },
-        { code: 'BGM', seq: 2, price: 15000 }
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'PGU', seq:2, price:10000, is_break_stop:false },
+        { code:'MOR', seq:3, price:20000, is_break_stop:false },
+        { code:'GAR', seq:4, price:30000, is_break_stop:true },
+        { code:'DDM', seq:5, price:40000, is_break_stop:false },
+        { code:'SGD', seq:6, price:50000, is_break_stop:false },
+        { code:'MWZ', seq:7, price:60000, is_break_stop:false },
       ]
     },
     // Arusha to Dar es Salaam
     {
       route_name: 'Arusha to Dar es Salaam',
       stations: [
-        { code: 'ARU', seq: 1, price: 0 },
-        { code: 'DSM', seq: 2, price: 50000 }
+        { code:'ARU', seq:1, price:0, is_break_stop:false },
+        { code:'MOS', seq:2, price:10000, is_break_stop:false },
+        { code:'SAM', seq:3, price:20000, is_break_stop:true },
+        { code:'KOR', seq:4, price:30000, is_break_stop:false },
+        { code:'MOR', seq:5, price:40000, is_break_stop:false },
+        { code:'DSM', seq:6, price:50000, is_break_stop:false },
+      ]
+    },
+    // Nairobi to Arusha
+    {
+      route_name: 'Nairobi to Arusha',
+      stations: [
+        { code:'NRB', seq:1, price:0, is_break_stop:false },
+        { code:'NAM', seq:2, price:20000, is_break_stop:true },
+        { code:'ARU', seq:3, price:35000, is_break_stop:false },
       ]
     },
     // Dodoma to Mbeya
     {
       route_name: 'Dodoma to Mbeya',
       stations: [
-        { code: 'DDM', seq: 1, price: 0 },
-        { code: 'IRG', seq: 2, price: 20000 },
-        { code: 'MBY', seq: 3, price: 40000 }
+        { code:'DDM', seq:1, price:0, is_break_stop:false },
+        { code:'IRG', seq:2, price:25000, is_break_stop:true },
+        { code:'MBY', seq:3, price:40000, is_break_stop:false },
+      ]
+    },
+    // Dar es Salaam to Bagamoyo (Mini bus)
+    {
+      route_name: 'Dar es Salaam to Bagamoyo',
+      stations: [
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'TGT', seq:2, price:8000, is_break_stop:false },
+        { code:'BGM', seq:3, price:15000, is_break_stop:false },
+      ]
+    },
+    // Arusha to Serengeti (Safari car)
+    {
+      route_name: 'Arusha to Serengeti',
+      stations: [
+        { code:'ARU', seq:1, price:0, is_break_stop:false },
+        { code:'NGO', seq:2, price:150000, is_break_stop:true },
+        { code:'SRG', seq:3, price:250000, is_break_stop:false },
+      ]
+    },
+    // Arusha to Ngorongoro (Safari car)
+    {
+      route_name: 'Arusha to Ngorongoro',
+      stations: [
+        { code:'ARU', seq:1, price:0, is_break_stop:false },
+        { code:'NGO', seq:2, price:180000, is_break_stop:false },
+      ]
+    },
+    // Train routes
+    {
+      route_name: 'Dar es Salaam to Kigoma',
+      stations: [
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'MOR', seq:2, price:15000, is_break_stop:false },
+        { code:'DDM', seq:3, price:25000, is_break_stop:true },
+        { code:'TAB', seq:4, price:35000, is_break_stop:true },
+        { code:'KIG', seq:5, price:45000, is_break_stop:false },
+      ]
+    },
+    {
+      route_name: 'Nairobi to Mombasa',
+      stations: [
+        { code:'NRB', seq:1, price:0, is_break_stop:false },
+        { code:'ATH', seq:2, price:15000, is_break_stop:false },
+        { code:'EML', seq:3, price:25000, is_break_stop:true },
+        { code:'VOI', seq:4, price:35000, is_break_stop:false },
+        { code:'MBA', seq:5, price:50000, is_break_stop:false },
+      ]
+    },
+    // Airplane routes
+    {
+      route_name: 'Dar es Salaam to Kilimanjaro',
+      stations: [
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'KIA', seq:2, price:180000, is_break_stop:false },
+      ]
+    },
+    {
+      route_name: 'Dar es Salaam to Zanzibar',
+      stations: [
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'ZNZ', seq:2, price:120000, is_break_stop:false },
+      ]
+    },
+    {
+      route_name: 'Arusha to Serengeti',
+      stations: [
+        { code:'ARU', seq:1, price:0, is_break_stop:false },
+        { code:'SRG', seq:2, price:350000, is_break_stop:false },
       ]
     },
     // Dar es Salaam to Zanzibar (ferry)
     {
-      route_name: 'Dar es Salaam to Zanzibar',
+      route_name: 'Dar es Salaam to Zanzibar Ferry',
       stations: [
-        { code: 'DSM', seq: 1, price: 0 },
-        { code: 'ZNZ', seq: 2, price: 35000 }
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'ZNZ', seq:2, price:35000, is_break_stop:false },
       ]
     },
-    // Dar es Salaam to Pemba
+    // Dar es Salaam to Pemba (ferry)
     {
       route_name: 'Dar es Salaam to Pemba',
       stations: [
-        { code: 'DSM', seq: 1, price: 0 },
-        { code: 'PMB', seq: 2, price: 50000 }
+        { code:'DSM', seq:1, price:0, is_break_stop:false },
+        { code:'PMB', seq:2, price:50000, is_break_stop:false },
       ]
     },
     // Mwanza to Bukoba (ship)
     {
       route_name: 'Mwanza to Bukoba',
       stations: [
-        { code: 'MWZ', seq: 1, price: 0 },
-        { code: 'BUK', seq: 2, price: 30000 }
+        { code:'MWZ', seq:1, price:0, is_break_stop:false },
+        { code:'GEI', seq:2, price:15000, is_break_stop:true },
+        { code:'BUK', seq:3, price:30000, is_break_stop:false },
       ]
     },
     // Zanzibar to Prison Island
     {
       route_name: 'Zanzibar to Prison Island',
       stations: [
-        { code: 'ZNZ', seq: 1, price: 0 },
-        { code: 'PRN', seq: 2, price: 25000 }
+        { code:'ZNZ', seq:1, price:0, is_break_stop:false },
+        { code:'PRI', seq:2, price:25000, is_break_stop:false },
       ]
     }
   ];
@@ -1128,7 +1267,7 @@ const seedRouteStationsHardcoded = async (routes, stations) => {
           station_id: station.id,
           sequence_order: s.seq,
           cumulative_price: s.price,
-          is_break_stop: false,
+          is_break_stop: s.is_break_stop,
           distance_from_origin: (s.seq - 1) * 50
         }
       });
@@ -1137,7 +1276,7 @@ const seedRouteStationsHardcoded = async (routes, stations) => {
 };
 
 // Hardcoded system logs derived from expected mockSystemLogs
-const seedSystemLogsHardcoded = async (usersObj, companies) => {
+const seedSystemLogsHardcoded1 = async (usersObj, companies) => {
   const admin = usersObj.system && usersObj.system[1];
   const now = new Date();
   const logs = [
@@ -1153,6 +1292,340 @@ const seedSystemLogsHardcoded = async (usersObj, companies) => {
     });
   }
 };
+const seedSystemLogsHardcoded = async (usersObj, companies) => {
+  // const admin = usersObj.system && usersObj.system[1];
+
+  const logs = [
+    {
+      user_name: 'System Developer',
+      action: 'Created new company',
+      module: 'companies',
+      status: 'success',
+      timestamp: '2026-05-06T14:15:30Z',
+      details: 'Company: Kilimanjaro Express, Type: transport',
+      message: 'Created new company successfully',
+      ip_address: '192.168.1.10',
+      mac_address: '00:1A:2B:3C:4D:01'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Updated transport status',
+      module: 'transports',
+      status: 'success',
+      timestamp: '2026-05-06T14:22:15Z',
+      details: 'Transport: Express 001, Status changed to active',
+      message: 'Transport status updated successfully',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Created new route',
+      module: 'routes',
+      status: 'success',
+      timestamp: '2026-05-06T14:28:45Z',
+      details: 'Route: Dar es Salaam → Mwanza, Price: TSh 120,000',
+      message: 'New route created successfully',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Super Administrator',
+      action: 'Added new user',
+      module: 'users',
+      status: 'success',
+      timestamp: '2026-05-06T14:35:10Z',
+      details: 'User: grace.kimani@gmail.com, Role: staff',
+      message: 'New user added successfully',
+      ip_address: '192.168.1.13',
+      mac_address: '00:1A:2B:3C:4D:04'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Scheduled new timetable',
+      module: 'timetables',
+      status: 'success',
+      timestamp: '2026-05-06T14:42:20Z',
+      details: 'Route: Dar es Salaam → Mwanza, Departure: 08:00',
+      message: 'Timetable scheduled successfully',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Updated facility',
+      module: 'facilities',
+      status: 'success',
+      timestamp: '2026-05-06T14:48:55Z',
+      details: 'Facility: Dar Es Salaam Cinemas, Updated capacity to 120 seats',
+      message: 'Facility updated successfully',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Created new activity',
+      module: 'activities',
+      status: 'success',
+      timestamp: '2026-05-06T14:55:30Z',
+      details: 'Activity: Avengers: Endgame, Price: TSh 12,000',
+      message: 'Activity created successfully',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Super Administrator',
+      action: 'Generated revenue report',
+      module: 'reports',
+      status: 'info',
+      timestamp: '2026-05-06T15:02:15Z',
+      details: 'Monthly report for April 2026, Total revenue: TSh 45,680,000',
+      message: 'Revenue report generated',
+      ip_address: '192.168.1.13',
+      mac_address: '00:1A:2B:3C:4D:04'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Updated booking status',
+      module: 'bookings',
+      status: 'success',
+      timestamp: '2026-05-06T15:08:40Z',
+      details: 'Booking: BK-2026-001, Status changed to confirmed',
+      message: 'Booking status updated',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Deleted old route',
+      module: 'routes',
+      status: 'warning',
+      timestamp: '2026-05-06T15:15:25Z',
+      details: 'Route: Dodoma → Morogoro has been permanently deleted',
+      message: 'Route deleted',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    },
+
+    {
+      user_name: 'System',
+      action: 'System backup initiated',
+      module: 'system',
+      status: 'info',
+      timestamp: '2026-05-06T15:20:10Z',
+      details: 'Daily automated backup started at 15:20',
+      message: 'System backup started',
+      ip_address: '127.0.0.1',
+      mac_address: '00:00:00:00:00:01'
+    },
+
+    {
+      user_name: 'Super Administrator',
+      action: 'Updated company settings',
+      module: 'companies',
+      status: 'success',
+      timestamp: '2026-05-06T15:25:45Z',
+      details: 'Company: Kilimanjaro Express, Updated contact information',
+      message: 'Company settings updated',
+      ip_address: '192.168.1.13',
+      mac_address: '00:1A:2B:3C:4D:04'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Failed to update timetable',
+      module: 'timetables',
+      status: 'error',
+      timestamp: '2026-05-06T15:30:20Z',
+      details: 'Invalid time range: End time must be after start time',
+      message: 'Timetable update failed',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Suspended user account',
+      module: 'users',
+      status: 'warning',
+      timestamp: '2026-05-06T15:35:55Z',
+      details: 'User: test.user@example.com suspended due to multiple failed login attempts',
+      message: 'User account suspended',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Confirmed booking',
+      module: 'bookings',
+      status: 'success',
+      timestamp: '2026-05-06T15:40:30Z',
+      details: 'Booking: BK-2026-002, Payment received TSh 85,000',
+      message: 'Booking confirmed successfully',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Super Administrator',
+      action: 'Cleared system logs',
+      module: 'system',
+      status: 'info',
+      timestamp: '2026-05-06T15:45:15Z',
+      details: 'Cleared 1,245 log entries older than 30 days',
+      message: 'System logs cleared',
+      ip_address: '192.168.1.13',
+      mac_address: '00:1A:2B:3C:4D:04'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Added new transport',
+      module: 'transports',
+      status: 'success',
+      timestamp: '2026-05-06T15:50:40Z',
+      details: 'Transport: Luxury Bus 002, Type: bus, Capacity: 45 seats',
+      message: 'Transport added successfully',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Updated activity price',
+      module: 'activities',
+      status: 'success',
+      timestamp: '2026-05-06T15:55:25Z',
+      details: 'Activity: Simba SC vs Young Africans, New price: TSh 20,000',
+      message: 'Activity price updated',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'System',
+      action: 'Database maintenance completed',
+      module: 'system',
+      status: 'success',
+      timestamp: '2026-05-06T16:00:00Z',
+      details: 'Optimized 12 tables, freed 2.3 GB of space',
+      message: 'Database maintenance completed',
+      ip_address: '127.0.0.1',
+      mac_address: '00:00:00:00:00:01'
+    },
+
+    {
+      user_name: 'Super Administrator',
+      action: 'Failed to delete facility',
+      module: 'facilities',
+      status: 'error',
+      timestamp: '2026-05-06T16:05:30Z',
+      details: 'Cannot delete facility with active bookings',
+      message: 'Facility deletion failed',
+      ip_address: '192.168.1.13',
+      mac_address: '00:1A:2B:3C:4D:04'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Updated route pricing',
+      module: 'routes',
+      status: 'success',
+      timestamp: '2026-05-06T16:10:45Z',
+      details: 'Route: Arusha → Moshi, Price updated from TSh 25,000 to TSh 28,000',
+      message: 'Route pricing updated',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    },
+
+    {
+      user_name: 'Naomi Ochieng',
+      action: 'Exported booking report',
+      module: 'reports',
+      status: 'info',
+      timestamp: '2026-05-06T16:15:20Z',
+      details: 'Exported 156 bookings for date range: May 1-6, 2026',
+      message: 'Booking report exported',
+      ip_address: '192.168.1.12',
+      mac_address: '00:1A:2B:3C:4D:03'
+    },
+
+    {
+      user_name: 'Super Administrator',
+      action: 'Changed user role',
+      module: 'users',
+      status: 'warning',
+      timestamp: '2026-05-06T16:20:15Z',
+      details: 'User: staff.member@example.com promoted from staff to company_admin',
+      message: 'User role changed',
+      ip_address: '192.168.1.13',
+      mac_address: '00:1A:2B:3C:4D:04'
+    },
+
+    {
+      user_name: 'System',
+      action: 'Security scan completed',
+      module: 'system',
+      status: 'info',
+      timestamp: '2026-05-06T16:25:00Z',
+      details: 'No vulnerabilities detected, all systems secure',
+      message: 'Security scan completed',
+      ip_address: '127.0.0.1',
+      mac_address: '00:00:00:00:00:01'
+    },
+
+    {
+      user_name: 'Baraka Mwenda',
+      action: 'Cancelled timetable',
+      module: 'timetables',
+      status: 'warning',
+      timestamp: '2026-05-06T16:30:45Z',
+      details: 'Timetable cancelled: Dar es Salaam → Dodoma, 2026-05-08 due to maintenance',
+      message: 'Timetable cancelled',
+      ip_address: '192.168.1.11',
+      mac_address: '00:1A:2B:3C:4D:02'
+    }
+  ];
+
+  const users = await User.findAll();
+  
+  for (const log of logs) {
+
+    const matchedUser = users.find(
+      (u) => `${u.first_name} ${u.last_name}` === log.user_name
+    );
+
+    await SystemLog.findOrCreate({
+      where: {
+        action: log.action,
+        timestamp: log.timestamp
+      },
+
+      defaults: {
+        user_id: matchedUser ? matchedUser.id : null,
+        user_name: log.user_name,
+        action: log.action,
+        module: log.module,
+        status: log.status,
+        timestamp: log.timestamp,
+        details: log.details,
+        message: log.message,
+        ip_address: log.ip_address,
+        mac_address: log.mac_address
+      }
+    });
+  }
+};
 
 const seedRoutes = async (transports, stations) => {
   const routeDefinitions = [
@@ -1162,7 +1635,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Dar es Salaam to Mwanza',
       description: 'Dar es Salaam to Mwanza via Morogoro, Dodoma, Singida',
       origin_code: 'DSM',
-      destination_code: 'MBY',
+      destination_code: 'MWZ',
       base_price: 60000,
       status: 'active'
     },
@@ -1179,7 +1652,7 @@ const seedRoutes = async (transports, stations) => {
       transport_registration: 'T-003-NRB',
       name: 'Nairobi to Arusha',
       description: 'Cross-border service from Nairobi to Arusha',
-      origin_code: 'DSM',
+      origin_code: 'NRB',
       destination_code: 'ARU',
       base_price: 35000,
       status: 'active'
@@ -1200,7 +1673,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Dar es Salaam to Bagamoyo',
       description: 'Short route shuttle service',
       origin_code: 'DSM',
-      destination_code: 'MGO',
+      destination_code: 'BGM',
       base_price: 15000,
       status: 'active'
     },
@@ -1211,7 +1684,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Arusha to Serengeti',
       description: 'Safari transfer from Arusha to Serengeti National Park',
       origin_code: 'ARU',
-      destination_code: 'DSM',
+      destination_code: 'SRG',
       base_price: 250000,
       status: 'active'
     },
@@ -1220,7 +1693,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Arusha to Ngorongoro',
       description: 'Safari transfer to Ngorongoro Crater',
       origin_code: 'ARU',
-      destination_code: 'DSM',
+      destination_code: 'NGO',
       base_price: 180000,
       status: 'active'
     },
@@ -1231,7 +1704,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Dar es Salaam to Kigoma',
       description: 'Cross-country train service to Kigoma via Morogoro, Dodoma, Tabora',
       origin_code: 'DSM',
-      destination_code: 'MBY',
+      destination_code: 'KIG',
       base_price: 45000,
       status: 'active'
     },
@@ -1239,8 +1712,8 @@ const seedRoutes = async (transports, stations) => {
       transport_registration: 'TR-003-KEN',
       name: 'Nairobi to Mombasa',
       description: 'Standard Gauge Railway from Nairobi to Mombasa',
-      origin_code: 'DSM',
-      destination_code: 'ZNZ',
+      origin_code: 'NRB',
+      destination_code: 'MBA',
       base_price: 50000,
       status: 'active'
     },
@@ -1251,7 +1724,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Dar es Salaam to Kilimanjaro',
       description: 'Domestic flight from Dar es Salaam to Kilimanjaro Airport',
       origin_code: 'DSM',
-      destination_code: 'ARU',
+      destination_code: 'KIA',
       base_price: 180000,
       status: 'active'
     },
@@ -1269,7 +1742,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Arusha to Serengeti',
       description: 'Safari flight to Serengeti airstrip',
       origin_code: 'ARU',
-      destination_code: 'DSM',
+      destination_code: 'SRG',
       base_price: 350000,
       status: 'active'
     },
@@ -1277,7 +1750,7 @@ const seedRoutes = async (transports, stations) => {
     // Ferry routes
     {
       transport_registration: 'F-001-ISL',
-      name: 'Dar es Salaam to Zanzibar',
+      name: 'Dar es Salaam to Zanzibar Ferry',
       description: 'High-speed ferry service to Zanzibar',
       origin_code: 'DSM',
       destination_code: 'ZNZ',
@@ -1299,8 +1772,8 @@ const seedRoutes = async (transports, stations) => {
       transport_registration: 'S-001-LVC',
       name: 'Mwanza to Bukoba',
       description: 'Lake Victoria passenger ship service',
-      origin_code: 'MBY',
-      destination_code: 'ZNZ',
+      origin_code: 'MWZ',
+      destination_code: 'BUK',
       base_price: 30000,
       status: 'active'
     },
@@ -1311,7 +1784,7 @@ const seedRoutes = async (transports, stations) => {
       name: 'Zanzibar to Prison Island',
       description: 'Speed boat transfer to Prison Island',
       origin_code: 'ZNZ',
-      destination_code: 'PMB',
+      destination_code: 'PRI',
       base_price: 25000,
       status: 'active'
     }
