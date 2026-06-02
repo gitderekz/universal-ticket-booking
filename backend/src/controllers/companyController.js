@@ -10,12 +10,14 @@ const slugify = (value) => {
 };
 
 const createCompany = async (req, res, next) => {
+  console.log("HALLKA");
   try {
-    const { name, description, category, logo_url, contact_email, contact_phone } = req.body;
+    const { name, description, slug, category, logo_url, contact_email, contact_phone } = req.body;
+    console.log('BODY: ',req.body);
     const company = await Company.create({
       owner_id: req.user.id,
       name,
-      slug: slugify(name),
+      slug: slugify(slug),
       description,
       category,
       logo_url,

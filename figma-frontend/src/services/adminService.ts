@@ -259,3 +259,214 @@ export const getAdminStats = async () => {
   const response = await apiClient.get('/admin/stats');
   return response.data;
 };
+
+// Transport Types
+export const getTransportTypes = async () => {
+  const response = await apiClient.get('/transport-types');
+  return response.data;
+};
+
+export const createTransportType = async (data: {
+  name: string;
+  slug: string;
+  category: 'land' | 'air' | 'water';
+  description?: string;
+  requires_routes?: boolean;
+  requires_layout?: boolean;
+  active?: boolean;
+}) => {
+  const response = await apiClient.post('/transport-types', data);
+  return response.data;
+};
+
+export const updateTransportType = async (id: string, data: any) => {
+  const response = await apiClient.put(`/transport-types/${id}`, data);
+  return response.data;
+};
+
+export const deleteTransportType = async (id: string) => {
+  const response = await apiClient.delete(`/transport-types/${id}`);
+  return response.data;
+};
+
+// Facility Types
+export const getFacilityTypes = async () => {
+  const response = await apiClient.get('/facility-types');
+  return response.data;
+};
+
+export const createFacilityType = async (data: {
+  name: string;
+  slug: string;
+  category: string;
+  description?: string;
+  active?: boolean;
+}) => {
+  const response = await apiClient.post('/facility-types', data);
+  return response.data;
+};
+
+export const updateFacilityType = async (id: string, data: any) => {
+  const response = await apiClient.put(`/facility-types/${id}`, data);
+  return response.data;
+};
+
+export const deleteFacilityType = async (id: string) => {
+  const response = await apiClient.delete(`/facility-types/${id}`);
+  return response.data;
+};
+
+// Stations
+export const getStations = async (params?: { company_id?: string; search?: string }) => {
+  const response = await apiClient.get('/stations', { params });
+  return response.data;
+};
+
+export const createStation = async (data: {
+  company_id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  address?: string;
+  city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  type?: 'origin' | 'destination' | 'intermediate' | 'terminal';
+}) => {
+  const response = await apiClient.post('/stations', data);
+  return response.data;
+};
+
+export const updateStation = async (id: string, data: any) => {
+  const response = await apiClient.put(`/stations/${id}`, data);
+  return response.data;
+};
+
+export const deleteStation = async (id: string) => {
+  const response = await apiClient.delete(`/stations/${id}`);
+  return response.data;
+};
+
+// Seat Layouts
+export const getSeatLayouts = async (params?: { layoutable_type?: string; layoutable_id?: string }) => {
+  const response = await apiClient.get('/seat-layouts', { params });
+  return response.data;
+};
+
+export const createSeatLayout = async (data: {
+  layoutable_id: string;
+  layoutable_type: 'transport' | 'facility';
+  pattern: string;
+  rows: number;
+  layout_type?: string;
+}) => {
+  const response = await apiClient.post('/seat-layouts', data);
+  return response.data;
+};
+
+export const updateSeatLayout = async (id: string, data: any) => {
+  const response = await apiClient.put(`/seat-layouts/${id}`, data);
+  return response.data;
+};
+
+export const deleteSeatLayout = async (id: string) => {
+  const response = await apiClient.delete(`/seat-layouts/${id}`);
+  return response.data;
+};
+
+// Roles
+export const getRoles = async () => {
+  const response = await apiClient.get('/roles');
+  return response.data;
+};
+
+export const createRole = async (data: { name: string; slug: string; description?: string }) => {
+  const response = await apiClient.post('/roles', data);
+  return response.data;
+};
+
+export const updateRole = async (id: string, data: any) => {
+  const response = await apiClient.put(`/roles/${id}`, data);
+  return response.data;
+};
+
+export const deleteRole = async (id: string) => {
+  const response = await apiClient.delete(`/roles/${id}`);
+  return response.data;
+};
+
+// Currencies
+export const getCurrencies = async () => {
+  const response = await apiClient.get('/currencies');
+  return response.data;
+};
+
+export const createCurrency = async (data: {
+  code: string;
+  name: string;
+  symbol: string;
+  exchange_rate: number;
+  is_base?: boolean;
+  active?: boolean;
+}) => {
+  const response = await apiClient.post('/currencies', data);
+  return response.data;
+};
+
+export const updateCurrency = async (id: string, data: any) => {
+  const response = await apiClient.put(`/currencies/${id}`, data);
+  return response.data;
+};
+
+export const deleteCurrency = async (id: string) => {
+  const response = await apiClient.delete(`/currencies/${id}`);
+  return response.data;
+};
+
+// Journeys
+// export const getJourneys = async (params?: { route_id?: string; status?: string; date?: string }) => {
+//   const response = await apiClient.get('/journeys', { params });
+//   return response.data;
+// };
+export const getJourneys = async (params?: { 
+  route_id?: string; 
+  transport_id?: string; 
+  status?: string; 
+  date?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  const response = await apiClient.get('/journeys', { params });
+  // Return the full response which contains { journeys, total, limit, offset }
+  return response.data;
+};
+
+export const getJourney = async (id: string) => {
+  const response = await apiClient.get(`/journeys/${id}`);
+  return response.data;
+};
+
+export const createJourney = async (data: {
+  route_id: string;
+  transport_id: string;
+  journey_date: string;
+  departure_at: string;
+  arrival_at: string;
+  available_seats: number;
+  status?: string;
+  delay_minutes?: number;
+}) => {
+  const response = await apiClient.post('/journeys', data);
+  return response.data;
+};
+
+export const updateJourney = async (id: string, data: any) => {
+  const response = await apiClient.put(`/journeys/${id}`, data);
+  return response.data;
+};
+
+export const deleteJourney = async (id: string) => {
+  const response = await apiClient.delete(`/journeys/${id}`);
+  return response.data;
+};

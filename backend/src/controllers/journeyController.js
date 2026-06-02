@@ -1,6 +1,53 @@
 const { Journey, Transport, Route, Station, Timetable } = require('../models');
 const { Op } = require('sequelize');
 
+const listJourneys = async (req, res, next) => {
+  try {
+    const { route_id, transport_id, status, date, limit = 100, offset = 0 } = req.query;
+
+    const where = {};
+    if (route_id) where.route_id = route_id;
+    if (transport_id) where.transport_id = transport_id;
+    if (status) where.status = status;
+    if (date) where.journey_date = date;
+
+    const journeys = await Journey.findAndCountAll({
+      where,
+      include: [
+        {
+          model: Route,
+          attributes: ['id', 'name', 'base_price'],
+          include: [
+            { model: require('../models').Station, as: 'originStation', attributes: ['id', 'name', 'city'] },
+            { model: require('../models').Station, as: 'destinationStation', attributes: ['id', 'name', 'city'] }
+          ]
+        },
+        {
+          model: require('../models').Transport,
+          attributes: ['id', 'name', 'capacity', 'registration_number'],
+          include: [{ model: require('../models').TransportType, attributes: ['name', 'slug'] }]
+        },
+        {
+          model: require('../models').Timetable,
+          attributes: ['id', 'departure_time', 'arrival_time']
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['journey_date', 'DESC'], ['departure_at', 'ASC']]
+    });
+
+    res.json({
+      journeys: journeys.rows,
+      total: journeys.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const searchJourneys = async (req, res, next) => {
   try {
     const { origin_station_id, destination_station_id, journey_date, limit = 20, offset = 0 } = req.query;
@@ -236,6 +283,7 @@ const deleteJourney = async (req, res, next) => {
 };
 
 module.exports = {
+  listJourneys,
   searchJourneys,
   getJourneysByRoute,
   getJourney,

@@ -26,6 +26,13 @@ const activityInstanceRoutes = require('./routes/activity-instance');
 const adminRoutes = require('./routes/admin');
 const reportRoutes = require('./routes/report');
 
+const facilityTypeRoutes = require('./routes/facilityType');
+const transportTypeRoutes = require('./routes/transportType');
+const stationRoutes = require('./routes/station');
+const seatLayoutRoutes = require('./routes/seatLayout');
+const roleRoutes = require('./routes/role');
+const currencyRoutes = require('./routes/currency');
+
 // Import socket handlers
 const socketHandlers = require('./sockets');
 
@@ -90,6 +97,7 @@ app.use('/uploads', express.static('uploads'));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin/companies', companyRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/transports', transportRoutes);
 app.use('/api/routes', routeRoutes);
@@ -102,6 +110,12 @@ app.use('/api/activities', activityRoutes);
 app.use('/api/activity-instances', activityInstanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/facility-types', facilityTypeRoutes);
+app.use('/api/transport-types', transportTypeRoutes);
+app.use('/api/stations', stationRoutes);
+app.use('/api/seat-layouts', seatLayoutRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/currencies', currencyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -128,10 +142,11 @@ const startServer = async () => {
       const forceRebuild = process.env.FORCE_DB_REBUILD === 'true';
       await sequelize.sync({ force: forceRebuild, alter: !forceRebuild });
       console.log('Database synchronized successfully.');
+
+      // Seed required data
+      await seedDatabase();
     }
 
-    // Seed required data
-    await seedDatabase();
 
     // Start cron jobs
     cronJobs.start();

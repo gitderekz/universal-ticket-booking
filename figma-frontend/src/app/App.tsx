@@ -26,6 +26,15 @@ import { ReportsPage } from './pages/Admin/ReportsPage';
 import { SystemLogsPage } from './pages/Admin/SystemLogsPage';
 import { ProfilePage } from './pages/Profile/ProfilePage';
 
+import { RolesPage } from './pages/Admin/Roles';
+import { CurrenciesPage } from './pages/Admin/Currencies';
+import { TransportTypesPage } from './pages/Admin/TransportTypes';
+import { FacilityTypesPage } from './pages/Admin/FacilityTypes';
+import { StationsPage } from './pages/Staff/Stations';
+import { SeatLayoutsPage } from './pages/Staff/SeatLayouts';
+import { JourneyManagement } from './pages/Staff/JourneyManagement';
+import { ActivityInstanceManagement } from './pages/Staff/ActivityInstanceManagement';
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
@@ -185,7 +194,15 @@ function AppRoutes() {
       />
       <Route path="/" element={<Navigate to="/dashboard" />} />
       <Route path="*" element={<Navigate to="/dashboard" />} />
-    </Routes>
+      <Route path="/roles" element={<RolesPage />} />
+      <Route path="/currencies" element={<CurrenciesPage />} />
+      <Route path="/transport-types" element={<TransportTypesPage />} />
+      <Route path="/facility-types" element={<FacilityTypesPage />} />
+      <Route path="/stations" element={<StationsPage />} />
+      <Route path="/seat-layouts" element={<SeatLayoutsPage />} />
+      <Route path="/journeys" element={<JourneyManagement />} />
+      <Route path="/activity-instances" element={<ActivityInstanceManagement />} />
+      </Routes>
     </MainLayout>
   );
 }
